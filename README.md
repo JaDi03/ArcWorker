@@ -1,3 +1,6 @@
+
+<img width="1200" height="300" alt="1" src="https://github.com/user-attachments/assets/067de4f7-cf8a-434d-9063-9460e1fecf94" />
+
 # ArcWorker Protocol
 ### Work for a minute, get paid in a second.
 
