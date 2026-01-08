@@ -1,1 +1,35 @@
-﻿[]
+[
+  {
+    "username": "testuser",
+    "password": "testpassword",
+    "email": "test@example.com",
+    "role": "agency",
+    "walletType": "circle"
+  },
+  {
+    "username": "verify",
+    "password": "password",
+    "email": "v@v.com",
+    "role": "agency"
+  },
+  {
+    "username": "master",
+    "password": "117516",
+    "email": "masteragencia814@gmail.com",
+    "walletAddress": "0x195cfec98f765ee2ca1d28c371f1de9ca21cc5b6",
+    "role": "agency",
+    "walletType": "circle",
+    "userId": null,
+    "createdAt": "2026-01-08T08:17:55.928Z"
+  },
+  {
+    "username": "blackhor",
+    "password": "198512",
+    "email": "arcworker098@gmail.com",
+    "walletAddress": "0x955e750d0fb95c4d7e9918ccd6b07c0db63ad026",
+    "role": "worker",
+    "walletType": "circle",
+    "userId": null,
+    "createdAt": "2026-01-08T08:22:26.120Z"
+  }
+]

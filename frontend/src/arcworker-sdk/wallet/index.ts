@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { W3SSdk } from '@circle-fin/w3s-pw-web-sdk';
 import axios from 'axios';
 
@@ -259,7 +259,7 @@ export function useArcWorkerWallet() {
                         });
                     }
 
-                    console.log("[ArcWorker SDK] DEBUG: circleSdk.performLogin call successfully initiated.");
+                    // circleSdk.performLogin call successfully initiated.
                 } catch (syncErr: any) {
                     callbackCalled = true;
                     clearTimeout(watchdog);
@@ -284,7 +284,6 @@ export function useArcWorkerWallet() {
         setLoginType('social');
         setStatusMessage(`Preparing secure link for ${provider}...`);
         setError(null);
-        console.log(`[ArcWorker SDK] PREPARING SOCIAL SESSION: ${provider}`);
 
         try {
             const sdk = getSdk();
@@ -295,14 +294,14 @@ export function useArcWorkerWallet() {
             if (!deviceId) {
                 deviceId = await sdk.getDeviceId();
             }
-            console.log("[ArcWorker SDK] Device ID ready.");
+            // Device ID ready.
 
             // 2. Get device tokens from backend
             const authResponse = await axios.post('/api/circle/auth/social',
                 { provider, userId, deviceId },
                 { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }
             );
-            console.log("[ArcWorker SDK] Backend Session Data ready.");
+            // Backend Session Data ready.
             const { deviceToken, deviceEncryptionKey } = authResponse.data;
 
             // Persist for the manual click
@@ -324,21 +323,21 @@ export function useArcWorkerWallet() {
     const preFetch = useCallback(async () => {
         try {
             const sdk = getSdk();
-            if (sdk) {
-                console.log("[ArcWorker SDK] Pre-fetching Device ID...");
+            if (sdk && !preFetchedDeviceId) {
                 const dId = await sdk.getDeviceId();
                 setPreFetchedDeviceId(dId);
-                console.log("[ArcWorker SDK] Device ID pre-fetched successfully.");
             }
         } catch (e) {
-            console.warn("[ArcWorker SDK] Device ID pre-fetch failed (will retry during login):", e);
+            // Silently fail pre-fetch, it will retry during actual login if needed
         }
-    }, []);
+    }, [preFetchedDeviceId]);
 
-    // Initial pre-fetch
-    if (typeof window !== 'undefined' && !preFetchedDeviceId && !isLoading) {
-        preFetch();
-    }
+    // Initial pre-fetch side effect
+    useEffect(() => {
+        if (typeof window !== 'undefined' && !preFetchedDeviceId && !isLoading) {
+            preFetch();
+        }
+    }, [preFetch, preFetchedDeviceId, isLoading]);
 
     /**
      * NEW: Email-Based OTP Flow (User-Controlled)

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Download, Plus, TrendingUp, ScanLine, MoreHorizontal, Check, X as XIcon, Type, Loader2, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { AgencySidebar } from './AgencySidebar';
+import { AgencySettings } from './AgencySettings';
 import WalletDashboardModal from '../WalletDashboardModal';
 import { useTasks } from '@/hooks/useTasks';
 import { useAccount, useWriteContract } from 'wagmi';
@@ -19,7 +20,6 @@ export const AgencyDashboard: React.FC = () => {
             // First, check localStorage cache
             const cachedAddress = localStorage.getItem('arc_wallet_address');
             if (cachedAddress) {
-                console.log('[Dashboard] Using cached Circle address:', cachedAddress);
                 setCircleAddress(cachedAddress);
             }
 
@@ -37,7 +37,6 @@ export const AgencyDashboard: React.FC = () => {
 
                     const data = await res.json();
                     if (data.address) {
-                        console.log('[Dashboard] Fetched Circle address from API:', data.address);
                         setCircleAddress(data.address);
                         // Cache it for next time
                         localStorage.setItem('arc_wallet_address', data.address);
@@ -55,7 +54,7 @@ export const AgencyDashboard: React.FC = () => {
     const effectiveAddress = userAddress || circleAddress;
 
     const { tasks: agencyTasks, isLoading } = useTasks(effectiveAddress);
-    const [activeView, setActiveView] = useState<'overview' | 'review'>('overview');
+    const [activeView, setActiveView] = useState<'overview' | 'review' | 'settings'>('overview');
     const [isWalletOpen, setIsWalletOpen] = useState(false);
 
     // Group tasks by title to represent "Campaigns"
@@ -84,14 +83,7 @@ export const AgencyDashboard: React.FC = () => {
 
     // Pending reviews (Status 1)
     const pendingReviews = useMemo(() => {
-        console.log('[AgencyDashboard] All agency tasks:', agencyTasks);
-        console.log('[AgencyDashboard] Filtering for status === 1');
-        const filtered = agencyTasks.filter((t: any) => {
-            console.log(`[AgencyDashboard] Task ${t.id}: status=${t.status}, worker=${t.worker}`);
-            return t.status === 1;
-        });
-        console.log('[AgencyDashboard] Pending reviews:', filtered);
-        return filtered;
+        return agencyTasks.filter((t: any) => t.status === 1);
     }, [agencyTasks]);
 
     const [selectedReview, setSelectedReview] = useState<any>(null);
@@ -264,13 +256,23 @@ export const AgencyDashboard: React.FC = () => {
 
     const handleNavigate = (page: string) => {
         if (page === 'review') setActiveView('review');
+        else if (page === 'settings') setActiveView('settings');
         else setActiveView('overview');
     };
+
+    if (activeView === 'settings') {
+        return (
+            <div className="flex h-screen overflow-hidden bg-gray-100 font-sans">
+                <AgencySettings onNavigate={handleNavigate} onWalletOpen={() => setIsWalletOpen(true)} />
+                <WalletDashboardModal isOpen={isWalletOpen} onClose={() => setIsWalletOpen(false)} />
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-screen overflow-hidden bg-gray-100 font-sans">
             <AgencySidebar
-                activePage={activeView === 'review' ? 'review' : 'overview'}
+                activePage={activeView}
                 onNavigate={handleNavigate}
                 onWalletOpen={() => setIsWalletOpen(true)}
             />
@@ -279,7 +281,7 @@ export const AgencyDashboard: React.FC = () => {
                 {/* Top Header */}
                 <header className="h-16 bg-white border-b border-gray-200 flex justify-between items-center px-8 shadow-sm shrink-0">
                     <h1 className="text-xl font-bold text-gray-900">
-                        {activeView === 'overview' ? 'Dashboard Overview' : 'Submissions Review (Quality Control)'}
+                        {activeView === 'review' ? 'Submissions Review (Quality Control)' : 'Dashboard Overview'}
                     </h1>
                     <div className="flex gap-4">
                         <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium hover:bg-gray-50 transition">
@@ -301,7 +303,6 @@ export const AgencyDashboard: React.FC = () => {
                 </header>
 
                 <div className="flex-1 overflow-y-auto p-8">
-
                     {/* VIEW: OVERVIEW */}
                     {activeView === 'overview' && (
                         <div className="space-y-8 animate-fade-in">
@@ -409,7 +410,7 @@ export const AgencyDashboard: React.FC = () => {
                             <div className="w-80 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
                                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                                     <h3 className="font-bold text-gray-700">Pending Review</h3>
-                                    <span className="bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded text-xs">12</span>
+                                    <span className="bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded text-xs">{pendingReviews.length}</span>
                                 </div>
                                 <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
                                     {pendingReviews.length === 0 ? (
@@ -506,7 +507,6 @@ export const AgencyDashboard: React.FC = () => {
                         </div>
                     )}
                 </div>
-
 
                 <WalletDashboardModal isOpen={isWalletOpen} onClose={() => setIsWalletOpen(false)} />
             </main >

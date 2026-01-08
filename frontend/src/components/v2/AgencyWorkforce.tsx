@@ -7,7 +7,6 @@ export const AgencyWorkforce: React.FC = () => {
 
     // Navigation stub
     const handleNavigate = (page: string) => {
-        console.log(`Navigate to ${page} (placeholder)`);
         // In a real app this would use a router
     };
 

@@ -74,7 +74,7 @@ export default function DesignPreview() {
                             <div className="flex items-center gap-3 bg-white border border-slate-200 p-1.5 pr-4 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group"
                                 onClick={() => user?.role === 'agency' ? router.push('/agency/dashboard') : router.push('/worker/dashboard')}>
                                 <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-100 group-hover:scale-105 transition-transform">
-                                    {user?.username?.charAt(1).toUpperCase() || 'A'}
+                                    {user?.username?.charAt(0).toUpperCase() || 'A'}
                                 </div>
                                 <div className="flex flex-col">
                                     <span className="text-xs font-bold text-slate-900 leading-tight">@{user?.username || 'User'}</span>
@@ -82,20 +82,10 @@ export default function DesignPreview() {
                                 </div>
                             </div>
                         ) : (
-                            <>
-                                <button
-                                    onClick={() => openAuth('login')}
-                                    className="text-slate-600 hover:text-blue-600 font-bold text-sm transition-colors"
-                                >
-                                    Log In
-                                </button>
-                                <button
-                                    onClick={() => openAuth('register')}
-                                    className="bg-[#2874ca] hover:bg-[#1d5ca3] text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-100"
-                                >
-                                    Get Started
-                                </button>
-                            </>
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-[#00b87b] animate-pulse" />
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Protocol status: Online</span>
+                            </div>
                         )}
                     </div>
                 </div>

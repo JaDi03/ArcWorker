@@ -24,9 +24,12 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
     const [mode, setMode] = useState<'register' | 'login' | 'recovery'>(initialMode);
     const [role, setRole] = useState<'worker' | 'agency' | 'developer'>('worker');
 
-    // Effect to update mode when modal opens or initialMode changes
+    // Track modal initialization to prevent resets on re-render
+    const [lastOpened, setLastOpened] = useState(false);
+
+    // Effect to update mode when modal opens
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && !lastOpened) {
             setMode(initialMode);
             if (preselectedRole) {
                 setRole(preselectedRole);
@@ -34,8 +37,13 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
             // Reset errors/steps on open
             setAuthError(null);
             setCurrentStep('wallet');
+            setLastOpened(true);
+        } else if (!isOpen && lastOpened) {
+            setLastOpened(false);
+            setAuthError(null);
+            setDetectedRole(null);
         }
-    }, [isOpen, initialMode, preselectedRole]);
+    }, [isOpen, initialMode, preselectedRole, lastOpened]);
 
     const [currentStep, setCurrentStep] = useState<'wallet' | 'profile'>('wallet');
 
@@ -56,6 +64,8 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
 
     // STATE: UI FEEDBACK
     const [authError, setAuthError] = useState<string | null>(null);
+    const [detectedRole, setDetectedRole] = useState<'worker' | 'agency' | 'developer' | null>(null);
+    const [isCheckingUser, setIsCheckingUser] = useState(false);
 
     // WEB3 HOOKS
     const { connectors, connect } = useConnect();
@@ -81,19 +91,24 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
     // ----------------------------------------------------------------------
 
     const checkUserExists = async (identifier: string) => {
+        if (!identifier) return { exists: false, role: null };
         try {
-            // Check against username/email via generic check route
+            setIsCheckingUser(true);
             const { data } = await axios.post('/api/auth/check', { email: identifier });
-            return data.exists;
-        } catch {
-            return false;
+            setDetectedRole(data.role);
+            setIsCheckingUser(false);
+            return data;
+        } catch (err: any) {
+            setIsCheckingUser(false);
+            return { exists: false, role: null };
         }
     };
 
     const handleUsernameBlur = async () => {
-        if (!username || mode !== 'register') return;
-        const exists = await checkUserExists(username);
-        if (exists) {
+        if (!username) return;
+        const result = await checkUserExists(username);
+
+        if (mode === 'register' && result.exists) {
             setAuthError("Username already exists. Login instead?");
             setTimeout(() => {
                 setMode('login');
@@ -109,22 +124,31 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
             return;
         }
 
-        const exists = await checkUserExists(email);
-        if (exists) {
-            setAuthError("This email is already registered. Please log in.");
-            setMode('login');
+        const result = await checkUserExists(email);
+        if (result.exists) {
+            const dr = result.role;
+            if (dr && dr !== role) {
+                setAuthError(`This email is already registered as an ${dr.toUpperCase()}. Please switch to the correct portal.`);
+            } else {
+                setAuthError("This email is already registered. Please log in.");
+            }
+            setTimeout(() => {
+                setMode('login');
+            }, 2000);
             return;
         }
 
         try {
-            console.log("Starting Circle OTP Setup...", email);
-            const { address, userToken, userId } = await setupCircleOtpWallet(email);
-            if (address) {
-                setCapturedAddress(address);
-                setCapturedUserToken(userToken);
-                setCapturedUserId(userId);
+            const result = await setupCircleOtpWallet(email);
+
+            if (result && result.address) {
+                setCapturedAddress(result.address);
+                setCapturedUserToken(result.userToken);
+                setCapturedUserId(result.userId);
                 setCapturedWalletType('circle');
                 setCurrentStep('profile');
+            } else {
+                setAuthError("Email verified, but wallet is still initializing. Please wait and try again or contact support.");
             }
         } catch (err: any) {
             console.error("Circle OTP Registration Failed:", err);
@@ -230,8 +254,9 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
         } catch (err: any) {
             console.error("Registration failed:", err);
             setIsOnChainRegistering(false);
-            if (err.response?.status === 409) {
-                setAuthError("Username already taken.");
+            if (err.response?.status === 400 || err.response?.status === 409) {
+                setAuthError(err.response?.data?.error || "Username or Email already taken.");
+                // Switch back to wallet step to let them fix email if needed
                 setCurrentStep('wallet');
             } else {
                 alert("Registration failed. Please try again.");
@@ -251,9 +276,25 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
             setAuthError("Please enter both username and password.");
             return;
         }
+
+        // Force a role check and use the IMMEDIATE result (don't rely on async state update)
+        const checkResult = await checkUserExists(username);
+        const currentDetectedRole = checkResult.role;
+
+        // Proactive client-side check
+        if (currentDetectedRole && role && currentDetectedRole !== role) {
+            setAuthError(`Invalid portal. Your account is for ${currentDetectedRole.toUpperCase()}. Click 'Switch to portal' below if you want to change.`);
+            return;
+        }
+
         try {
             // Identifier is passed as 'email' to match backend expectation of 'identifier'
-            const response = await axios.post('/api/auth/login', { email: username, password });
+            // We also pass the requested role for server-side validation
+            const response = await axios.post('/api/auth/login', {
+                email: username,
+                password,
+                role: role
+            });
             const { user } = response.data;
 
             // If it's a Circle user, we ALSO need to establish a session (trigger OTP)
@@ -266,9 +307,9 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
                     user.address = result.address;
                     user.userId = result.userId;
                     user.walletType = 'circle';
-                } catch (err) {
+                } catch (err: any) {
                     console.error("Failed to re-establish Circle session:", err);
-                    setAuthError("Login success, but failed to connect wallet. Try again.");
+                    setAuthError(err.message || "Login success, but failed to connect wallet. Try again.");
                     return;
                 }
             }
@@ -277,8 +318,9 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
             onComplete(user);
             onClose();
         } catch (err: any) {
-            console.error("Login Error:", err);
-            setAuthError("Invalid username or password.");
+            console.error("Login Error Details:", err.response?.data || err.message);
+            const serverError = err.response?.data?.error;
+            setAuthError(serverError || "Invalid username or password.");
         }
     };
 
@@ -410,7 +452,11 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
                                             type="email"
                                             placeholder="Enter your email address"
                                             value={email}
-                                            onChange={(e) => setEmail(e.target.value.toLowerCase())}
+                                            onChange={(e) => {
+                                                setEmail(e.target.value.toLowerCase());
+                                                if (detectedRole) setDetectedRole(null);
+                                            }}
+                                            onBlur={() => checkUserExists(email)}
                                             required
                                             autoFocus
                                         />
@@ -617,10 +663,35 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
                                         type="text"
                                         placeholder="email@example.com or @username"
                                         value={username}
-                                        onChange={(e) => setUsername(e.target.value.replace(/\s+/g, '').toLowerCase())}
+                                        onChange={(e) => {
+                                            setUsername(e.target.value.replace(/\s+/g, '').toLowerCase());
+                                            if (detectedRole) setDetectedRole(null);
+                                        }}
+                                        onBlur={handleUsernameBlur}
                                         required
                                         autoFocus
                                     />
+                                    {isCheckingUser && (
+                                        <p className="text-[10px] text-blue-500 font-bold mt-1 animate-pulse uppercase tracking-wider px-1">Checking identity...</p>
+                                    )}
+                                    {detectedRole && role && detectedRole !== role && (
+                                        <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl animate-in slide-in-from-top-1">
+                                            <p className="text-[10px] font-bold text-amber-700 uppercase leading-tight">
+                                                ⚠️ Role Mismatch Detected
+                                            </p>
+                                            <p className="text-[11px] text-amber-600 mt-1">
+                                                This account is registered as a <span className="font-bold">{detectedRole}</span>.
+                                                You are currently in the <span className="font-bold">{role}</span> portal.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRole(detectedRole)}
+                                                className="mt-2 text-[10px] font-bold text-blue-600 hover:underline uppercase tracking-wider"
+                                            >
+                                                Switch to {detectedRole} portal
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 px-1">Password</label>

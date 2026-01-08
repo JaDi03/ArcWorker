@@ -23,21 +23,31 @@ export async function getUsers() {
     } else {
         // Local JSON Fallback
         if (!fs.existsSync(DB_PATH)) return [];
-        return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+        const content = fs.readFileSync(DB_PATH, 'utf8');
+        // Strip UTF-8 BOM if present
+        const cleanContent = content.startsWith('\uFEFF') ? content.slice(1) : content;
+        try {
+            return JSON.parse(cleanContent);
+        } catch (e) {
+            console.error('[DB] Failed to parse users.json:', e);
+            return [];
+        }
     }
 }
 
 export async function getUserByEmailOrUsername(identifier: string) {
+    if (!identifier) return null;
+    const id = identifier.toLowerCase();
     if (isProductionDB) {
         try {
-            const { rows } = await sql`SELECT * FROM users WHERE email = ${identifier} OR username = ${identifier} LIMIT 1`;
+            const { rows } = await sql`SELECT * FROM users WHERE LOWER(email) = ${id} OR LOWER(username) = ${id} LIMIT 1`;
             return rows[0] || null;
         } catch (error) {
             return null;
         }
     } else {
         const users = await getUsers();
-        return users.find((u: any) => u.email === identifier || u.username === identifier) || null;
+        return users.find((u: any) => u.email?.toLowerCase() === id || u.username?.toLowerCase() === id) || null;
     }
 }
 
@@ -131,7 +141,9 @@ export async function getSocialPayments(userAddress: string) {
         }
     } else {
         if (!fs.existsSync(MEMOS_PATH)) return [];
-        const memos = JSON.parse(fs.readFileSync(MEMOS_PATH, 'utf8'));
+        const content = fs.readFileSync(MEMOS_PATH, 'utf8');
+        const cleanContent = content.startsWith('\uFEFF') ? content.slice(1) : content;
+        const memos = JSON.parse(cleanContent);
         return memos.filter((m: any) =>
             m.fromAddress?.toLowerCase() === userAddress?.toLowerCase() ||
             m.toAddress?.toLowerCase() === userAddress?.toLowerCase()
@@ -153,7 +165,10 @@ export async function createSocialPayment(data: any) {
             throw error;
         }
     } else {
-        const memos = fs.existsSync(MEMOS_PATH) ? JSON.parse(fs.readFileSync(MEMOS_PATH, 'utf8')) : [];
+        if (!fs.existsSync(MEMOS_PATH)) return { success: true };
+        const content = fs.readFileSync(MEMOS_PATH, 'utf8');
+        const cleanContent = content.startsWith('\uFEFF') ? content.slice(1) : content;
+        const memos = JSON.parse(cleanContent);
         memos.push({
             ...data,
             createdAt: new Date().toISOString()

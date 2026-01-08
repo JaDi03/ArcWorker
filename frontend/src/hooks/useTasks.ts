@@ -22,6 +22,7 @@ export function useTasks(address?: string) {
         query: {
             staleTime: 30000, // 30 seconds - reduce RPC calls
             refetchInterval: 30000, // Auto-refresh every 30 seconds (was 5s)
+            refetchOnWindowFocus: false
         }
     });
 
@@ -58,6 +59,7 @@ export function useTasks(address?: string) {
             staleTime: 30000, // 30 seconds - reduce RPC calls
             refetchInterval: 30000, // Auto-refresh every 30 seconds (was 5s)
             enabled: tasksConfig.length > 0,
+            refetchOnWindowFocus: false
         }
     });
 

@@ -3,16 +3,32 @@ import { getUserByEmailOrUsername } from '@/utils/db';
 
 export async function POST(request: Request) {
     try {
-        const { email, password } = await request.json();
+        const body = await request.json();
+        const { email, password, role: requestedRole } = body;
 
-        // Security: Don't log credentials
+        console.log(`[Auth Login] Attempt for: ${email} as ${requestedRole || 'unknown'}`);
+
         const user = await getUserByEmailOrUsername(email);
 
-        if (!user || user.password !== password) {
-            return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+        if (!user) {
+            console.warn(`[Auth Login] User NOT FOUND: ${email}`);
+            return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
         }
 
-        console.log(`[Auth] User logged in: ${user.username}`);
+        if (user.password !== password) {
+            console.warn(`[Auth Login] WRONG PASSWORD for: ${email}`);
+            return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
+        }
+
+        // ROLE VALIDATION: Crucial for multi-portal safety
+        if (requestedRole && user.role !== requestedRole) {
+            console.warn(`[Auth Login] ROLE MISMATCH for ${email}: Expected ${user.role}, got ${requestedRole}`);
+            return NextResponse.json({
+                error: `Invalid portal. This account is registered as ${user.role.toUpperCase()}.`
+            }, { status: 403 });
+        }
+
+        console.log(`[Auth Login] SUCCESS: ${user.username} (${user.role})`);
 
         return NextResponse.json({
             success: true,
@@ -28,7 +44,7 @@ export async function POST(request: Request) {
             }
         });
     } catch (error: any) {
-        console.error('[Auth] Login error:', error.message);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('[Auth Login] CRITICAL ERROR:', error.message);
+        return NextResponse.json({ error: 'Internal server error during login' }, { status: 500 });
     }
 }

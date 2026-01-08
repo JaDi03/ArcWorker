@@ -9,10 +9,15 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const existingUser = await getUserByEmailOrUsername(username);
+        // Check if username OR email is already taken
+        const [existingByUsername, existingByEmail] = await Promise.all([
+            getUserByEmailOrUsername(username),
+            email ? getUserByEmailOrUsername(email) : Promise.resolve(null)
+        ]);
 
-        if (existingUser) {
-            return NextResponse.json({ error: 'Username already taken' }, { status: 400 });
+        if (existingByUsername || existingByEmail) {
+            const conflict = existingByUsername ? 'Username' : 'Email';
+            return NextResponse.json({ error: `${conflict} already taken` }, { status: 400 });
         }
 
         const userData = {

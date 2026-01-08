@@ -2,15 +2,26 @@ import React from 'react';
 import { Book, Copy, PlusCircle } from 'lucide-react';
 import { AgencySidebar } from './AgencySidebar';
 
-export const AgencySettings: React.FC = () => {
-    // Navigation stub
-    const handleNavigate = (page: string) => {
-        console.log(`Navigate to ${page} (placeholder)`);
-    };
+interface AgencySettingsProps {
+    onNavigate: (page: any) => void;
+    onWalletOpen?: () => void;
+}
+
+export const AgencySettings: React.FC<AgencySettingsProps> = ({ onNavigate, onWalletOpen }) => {
+    const [user, setUser] = React.useState<any>(null);
+    const [circleAddress, setCircleAddress] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        const storedUser = localStorage.getItem('arc_user');
+        if (storedUser) setUser(JSON.parse(storedUser));
+
+        const cachedAddress = localStorage.getItem('arc_wallet_address');
+        if (cachedAddress) setCircleAddress(cachedAddress);
+    }, []);
 
     return (
         <div className="flex h-screen overflow-hidden bg-gray-100 font-sans">
-            <AgencySidebar activePage="settings" onNavigate={handleNavigate} />
+            <AgencySidebar activePage="settings" onNavigate={onNavigate} onWalletOpen={onWalletOpen} />
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
                 <header className="h-16 bg-white border-b border-gray-200 flex justify-between items-center px-8 shadow-sm shrink-0">
@@ -58,10 +69,12 @@ export const AgencySettings: React.FC = () => {
                                 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Ethereum-icon-purple.svg/480px-Ethereum-icon-purple.svg.png" className="w-5 h-5" alt="ETH" />
                             </div>
                             <div className="flex-1">
-                                <p className="font-bold text-gray-900">Ethereum Wallet (USDC/ETH)</p>
-                                <p className="text-xs text-gray-600 font-mono">0x71C...928A Connected</p>
+                                <p className="font-bold text-gray-900">Circle Programmable Wallet (USDC)</p>
+                                <p className="text-xs text-gray-600 font-mono">{circleAddress || 'Not Connected'}</p>
                             </div>
-                            <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded">Active</span>
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${circleAddress ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                                {circleAddress ? 'Active' : 'Missing'}
+                            </span>
                         </div>
 
                         <button className="flex items-center gap-2 text-gray-500 hover:text-gray-900 text-sm font-medium">
@@ -75,10 +88,12 @@ export const AgencySettings: React.FC = () => {
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">SV</div>
+                                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                                        {user?.username?.charAt(0).toUpperCase() || 'A'}
+                                    </div>
                                     <div>
-                                        <p className="text-sm font-bold text-gray-900">You (Owner)</p>
-                                        <p className="text-xs text-gray-500">admin@shelfvision.ai</p>
+                                        <p className="text-sm font-bold text-gray-900">{user?.username || 'You'} (Owner)</p>
+                                        <p className="text-xs text-gray-500">{user?.email || 'No email set'}</p>
                                     </div>
                                 </div>
                                 <span className="text-xs text-gray-400">Admin</span>

@@ -111,22 +111,12 @@ export const WorkerTaskFeed: React.FC = () => {
     const [selectedTask, setSelectedTask] = useState<any>(null);
 
     const availableTasks: TaskOpportunity[] = useMemo(() => {
-        console.log('[WorkerTaskFeed] Raw tasks:', rawTasks);
-        console.log('[WorkerTaskFeed] Is loading:', isLoading);
-
         if (!rawTasks) {
-            console.log('[WorkerTaskFeed] No raw tasks available');
             return [];
         }
 
         // Filter for tasks that are available (Status 0) and not expired
         const now = Math.floor(Date.now() / 1000);
-        console.log('[WorkerTaskFeed] Current time:', now, new Date(now * 1000).toISOString());
-
-        // Log first 3 tasks to debug
-        rawTasks.slice(0, 3).forEach((t: any) => {
-            console.log(`[WorkerTaskFeed] Task ${t.id}: status=${t.status}, deadline=${t.deadline} (${new Date(Number(t.deadline) * 1000).toISOString()}), expired=${Number(t.deadline) <= now}`);
-        });
 
         const filtered = rawTasks
             .filter((t: any) => t.status === 0 && Number(t.deadline) > now)
@@ -147,13 +137,11 @@ export const WorkerTaskFeed: React.FC = () => {
                 };
             });
 
-        console.log('[WorkerTaskFeed] Filtered available tasks:', filtered);
         return filtered;
     }, [rawTasks]);
 
     // If no tasks from contract, show mock tasks in dev mode (for preview)
     const tasksToShow = availableTasks.length > 0 ? availableTasks : MOCK_TASKS;
-    console.log('[WorkerTaskFeed] Tasks to show:', tasksToShow.length, 'tasks (', availableTasks.length, 'real,', MOCK_TASKS.length, 'mock)');
 
     // Mock Config Generator (This would come from the smart contract metadata in production)
     const getTaskConfig = (moduleId: string): TaskConfig => {

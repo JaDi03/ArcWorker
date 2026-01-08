@@ -3,18 +3,30 @@ import { getUserByEmailOrUsername } from '@/utils/db';
 
 export async function POST(request: Request) {
     try {
-        const { email } = await request.json();
+        const body = await request.json().catch(() => ({}));
+        const { email } = body;
+
+        console.log(`[Auth Check] Request received for: ${email}`);
 
         if (!email) {
-            return NextResponse.json({ error: 'Email required' }, { status: 400 });
+            return NextResponse.json({ exists: false, role: null, message: 'No identifier provided' });
         }
 
         const user = await getUserByEmailOrUsername(email);
 
-        return NextResponse.json({ exists: !!user });
+        console.log(`[Auth Check] Lookup result for ${email}:`, user ? 'Found' : 'Not Found');
+        if (user) console.log(`[Auth Check] User Role: ${user.role}`);
+
+        return NextResponse.json({
+            exists: !!user,
+            role: user?.role || null
+        });
 
     } catch (error: any) {
-        console.error("[Auth Check] Error:", error.message);
-        return NextResponse.json({ error: 'Check failed' }, { status: 500 });
+        console.error("[Auth Check] CRITICAL ERROR:", error.message);
+        return NextResponse.json({
+            error: 'Internal check failure',
+            details: error.message
+        }, { status: 500 });
     }
 }
