@@ -27,6 +27,10 @@ contract MockYieldVault {
         startTimestamp = block.timestamp;
     }
 
+    // CRITICAL: Allow contract to receive native USDC/ETH
+    receive() external payable {}
+    fallback() external payable {}
+
     /**
      * @dev Calculates total assets controlled by the vault.
      * Starts with actual deposits + simulated yield based on time.

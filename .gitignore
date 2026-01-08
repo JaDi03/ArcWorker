@@ -12,6 +12,7 @@ next-env.d.ts
 build/
 dist/
 *.tsbuildinfo
+frontend/public/uploads/
 
 # Environmet & Secrets
 .env
@@ -31,6 +32,14 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Internal utilities and logs
+*.log
+*.txt
+*.tsbuildinfo
+debug_*.js
+setup_env.js
+BACKLOG.md
 
 # Debug Logs
 npm-debug.log*

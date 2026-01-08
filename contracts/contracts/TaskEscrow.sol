@@ -47,19 +47,56 @@ contract TaskEscrow {
     event TaskCancelled(uint256 indexed taskId, address indexed agency);
     event SavingsWithdrawn(address indexed user, uint256 assets, uint256 yieldEarned);
 
-    constructor(address _reputationRegistry, address _vault) {
+    constructor(address _reputationRegistry, address payable _vault) {
         reputationRegistry = ReputationRegistry(_reputationRegistry);
         vault = MockYieldVault(_vault);
         admin = msg.sender;
     }
 
-    // MANDATORY: Allow contract to receive ETH (Native USDC) from Vault withdrawals
+    // MANDATORY: Allow contract to receive ETH (Native USDC) 
+    // This is required for funding and vault compatibility.
     receive() external payable {}
     fallback() external payable {}
 
     /**
-     * @dev Create a new task and lock funds into the YIELD VAULT.
+     * @dev Create multiple tasks at once to save gas and signatures.
      */
+    function createTasksBatch(uint256 _rewardPerTask, uint256 _count, uint256 _deadline, string calldata _metadataHash) external payable {
+        require(_count > 0, "Count must be > 0");
+        uint256 fee = (_rewardPerTask * PLATFORM_FEE_BPS) / 10000;
+        uint256 requiredPerTask = _rewardPerTask + fee;
+        uint256 totalRequired = requiredPerTask * _count;
+
+        require(msg.value >= totalRequired, "Insufficient total deposit");
+
+        // 1. DEPOSIT TOTAL INTO VAULT
+        uint256 totalSharesMinted = vault.deposit{value: msg.value}();
+        uint256 sharesPerTask = totalSharesMinted / _count;
+
+        // 2. CREATE TASKS IN LOOP
+        for (uint256 i = 0; i < _count; i++) {
+            taskCounter++;
+            tasks[taskCounter] = Task({
+                id: taskCounter,
+                agency: msg.sender,
+                worker: address(0),
+                reward: _rewardPerTask,
+                depositShares: sharesPerTask,
+                deadline: block.timestamp + _deadline,
+                status: TaskStatus.Created,
+                metadataHash: _metadataHash,
+                answer: ""
+            });
+            emit TaskCreated(taskCounter, msg.sender, _rewardPerTask);
+        }
+
+        // Handle dust shares from division if any
+        uint256 dust = totalSharesMinted % _count;
+        if (dust > 0) {
+            tasks[taskCounter].depositShares += dust;
+        }
+    }
+
     function createTask(uint256 _reward, uint256 _deadline, string calldata _metadataHash) external payable {
         uint256 fee = (_reward * PLATFORM_FEE_BPS) / 10000;
         uint256 requiredDeposit = _reward + fee;
@@ -67,7 +104,6 @@ contract TaskEscrow {
         require(msg.value >= requiredDeposit, "Insufficient deposit");
 
         // 1. DEPOSIT INTO VAULT IMMEDIATELY
-        // The contract itself holds the shares, but we track them in the task struct
         uint256 sharesMinted = vault.deposit{value: msg.value}();
 
         taskCounter++;
@@ -76,7 +112,7 @@ contract TaskEscrow {
             agency: msg.sender,
             worker: address(0),
             reward: _reward,
-            depositShares: sharesMinted, // We track the SHARES, not the assets. Shares grow in value!
+            depositShares: sharesMinted,
             deadline: block.timestamp + _deadline,
             status: TaskStatus.Created,
             metadataHash: _metadataHash,
