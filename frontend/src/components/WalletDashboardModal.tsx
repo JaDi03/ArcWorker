@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useSendTransaction, useConnect, usePublicClient } from 'wagmi';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt, useBalance, useSendTransaction, useConnect, usePublicClient } from 'wagmi';
 import { CONTRACTS } from '@/utils/contracts';
 import { parseEther, formatUnits } from 'viem';
 import { useArcWorkerWallet } from '@/arcworker-sdk/wallet';
@@ -124,6 +124,41 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
             setResolvedAddress(null);
         }
     }, [recipient, nameResolution]);
+
+    // --- SOCIAL FEED NAME RESOLUTION ---
+    const uniqueMemoAddresses = useMemo(() => {
+        const addrs = new Set<string>();
+        socialMemos.forEach(m => {
+            if (m.fromAddress) addrs.add(m.fromAddress.toLowerCase());
+            if (m.toAddress) addrs.add(m.toAddress.toLowerCase());
+        });
+        return Array.from(addrs);
+    }, [socialMemos]);
+
+    const { data: resolvedMemoNames } = useReadContracts({
+        contracts: uniqueMemoAddresses.map((addr: string) => ({
+            address: CONTRACTS.UserRegistry.address,
+            abi: CONTRACTS.UserRegistry.abi,
+            functionName: 'getName',
+            args: [addr as `0x${string}`],
+        })),
+        query: {
+            enabled: uniqueMemoAddresses.length > 0
+        }
+    });
+
+    const socialNameMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        if (resolvedMemoNames) {
+            uniqueMemoAddresses.forEach((addr: string, i: number) => {
+                const name = resolvedMemoNames[i]?.result as string;
+                if (name && name.length > 0) {
+                    map[addr.toLowerCase()] = name;
+                }
+            });
+        }
+        return map;
+    }, [uniqueMemoAddresses, resolvedMemoNames]);
 
     // Sync Circle Session State
     useEffect(() => {
@@ -537,7 +572,14 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
             <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative min-h-[500px] flex flex-col transform transition-all">
                 {/* Header */}
                 <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                    <h3 className="font-bold text-slate-800 text-lg">My Wallet</h3>
+                    <div>
+                        <h3 className="font-bold text-slate-800 text-lg">My Wallet</h3>
+                        {currentAddressName && (
+                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">
+                                @{currentAddressName as string}
+                            </p>
+                        )}
+                    </div>
                     <button
                         onClick={onClose}
                         className="w-8 h-8 flex items-center justify-center bg-slate-200 text-slate-600 rounded-full hover:bg-slate-300 transition-colors font-bold"
@@ -798,6 +840,12 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                                 <div className="space-y-4">
                                     {socialMemos.map((m, i) => {
                                         const isOutgoing = m.fromAddress?.toLowerCase() === address?.toLowerCase();
+                                        const targetAddr = m.toAddress || '';
+                                        const senderAddr = m.fromAddress || '';
+
+                                        const targetName = socialNameMap[targetAddr.toLowerCase()];
+                                        const senderName = socialNameMap[senderAddr.toLowerCase()];
+
                                         return (
                                             <div key={i} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-start space-x-3 transition-all hover:border-blue-200">
                                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0 shadow-sm ${isOutgoing ? 'bg-blue-600' : 'bg-green-600'}`}>
@@ -805,11 +853,33 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                                                 </div>
                                                 <div className="flex-1">
                                                     <div className="flex justify-between items-start">
-                                                        <p className="text-xs font-bold text-slate-900">
-                                                            {isOutgoing ? 'To: ' : 'From: '}
-                                                            <span className="font-mono">{isOutgoing ? m.toAddress?.substring(0, 10) : m.fromAddress?.substring(0, 10)}...</span>
-                                                        </p>
-                                                        <p className="text-xs font-black text-slate-900">
+                                                        <div className="flex flex-col">
+                                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-0.5">
+                                                                {isOutgoing ? 'To' : 'From'}
+                                                            </p>
+                                                            <div className="text-sm font-black text-slate-900 flex items-center mb-1">
+                                                                {isOutgoing ? (
+                                                                    targetName ? (
+                                                                        <div className="flex flex-col">
+                                                                            <span className="text-blue-600">@{targetName}</span>
+                                                                            <span className="text-[10px] font-mono text-slate-400">{targetAddr.substring(0, 10)}...</span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="font-mono text-xs">{targetAddr.substring(0, 16)}...</span>
+                                                                    )
+                                                                ) : (
+                                                                    senderName ? (
+                                                                        <div className="flex flex-col">
+                                                                            <span className="text-green-600">@{senderName}</span>
+                                                                            <span className="text-[10px] font-mono text-slate-400">{senderAddr.substring(0, 10)}...</span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="font-mono text-xs">{senderAddr.substring(0, 16)}...</span>
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-xs font-black text-slate-900 shrink-0">
                                                             {isOutgoing ? '-' : '+'}{m.amount} {m.symbol || 'USDC'}
                                                         </p>
                                                     </div>
