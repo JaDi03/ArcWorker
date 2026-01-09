@@ -7,7 +7,7 @@ import { CONTRACTS } from '@/utils/contracts';
  * @param addressOrAddresses Optional address or array of addresses to filter tasks
  * @returns 
  */
-export function useTasks(addressOrAddresses?: string | string[]) {
+export function useTasks(addressOrAddresses?: string | string[], workerAddress?: string) {
     const [lastError, setLastError] = useState<string | null>(null);
 
     const { data: taskCount } = useReadContract({
@@ -41,7 +41,7 @@ export function useTasks(addressOrAddresses?: string | string[]) {
         }
     }, [readError]);
 
-    const [allTasks, setAllTasks] = useState<any[]>([]);
+    const [rawProcessedTasks, setRawProcessedTasks] = useState<any[]>([]);
 
     useEffect(() => {
         localStorage.removeItem('arc_tasks_cache');
@@ -122,9 +122,36 @@ export function useTasks(addressOrAddresses?: string | string[]) {
             });
 
         if (processed.length > 0) {
-            setAllTasks(processed);
+            setRawProcessedTasks(processed);
         }
     }, [rawTasks]);
+
+    // FETCH PARTICIPATION IN BATCH
+    const participationConfig = useMemo(() => {
+        if (!workerAddress || !rawProcessedTasks.length) return [];
+        return rawProcessedTasks.map(t => ({
+            address: CONTRACTS.TaskEscrow.address,
+            abi: CONTRACTS.TaskEscrow.abi,
+            functionName: 'taskParticipated',
+            args: [BigInt(t.id), workerAddress],
+        }));
+    }, [workerAddress, rawProcessedTasks]);
+
+    const { data: participations } = useReadContracts({
+        contracts: participationConfig as any,
+        query: {
+            enabled: !!workerAddress && rawProcessedTasks.length > 0,
+            staleTime: 5000,
+        }
+    });
+
+    const allTasks = useMemo(() => {
+        if (!participations) return rawProcessedTasks;
+        return rawProcessedTasks.map((t, i) => ({
+            ...t,
+            hasParticipated: participations[i]?.result === true
+        }));
+    }, [rawProcessedTasks, participations]);
 
     const filteredTasks = useMemo(() => {
         if (addresses.length === 0) return allTasks;

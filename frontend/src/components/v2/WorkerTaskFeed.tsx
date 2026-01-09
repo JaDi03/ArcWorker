@@ -113,7 +113,7 @@ const MOCK_TASKS: TaskOpportunity[] = [
 
 export const WorkerTaskFeed: React.FC = () => {
     const { address: userAddress, isConnected } = useAccount();
-    const { allTasks: rawTasks, isLoading } = useTasks();
+    const { allTasks: rawTasks, isLoading } = useTasks(undefined, userAddress);
     const [selectedTask, setSelectedTask] = useState<any>(null);
 
     const availableTasks: TaskOpportunity[] = useMemo(() => {
@@ -128,7 +128,7 @@ export const WorkerTaskFeed: React.FC = () => {
         const participatedCampaigns = new Set<string>();
         if (currentUserLower) {
             rawTasks.forEach((t: any) => {
-                if (t.worker?.toLowerCase() === currentUserLower && t.metadataHash) {
+                if (t.hasParticipated && t.metadataHash) {
                     participatedCampaigns.add(t.metadataHash);
                 }
             });

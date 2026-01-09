@@ -67,56 +67,71 @@ export async function platformAutoVerify(taskId: number | bigint) {
                 args: [id],
             }) as any;
 
-            // Task Struct: [id, agency, worker, reward, deposit, deadline, status, metadataHash, answer]
-            const status = Number(task[6]); // 1 = Submitted, 2 = Approved
-            const metadataStr = task[7];
-            const workerAnswer = task[8];
+            // Task Struct indices: 0:id, 1:agency, 2:reward, 3:deposit, 4:deadline, 5:status, 6:metadataHash, 7:requiredSubmissions, 8:currentSubmissions, 9:correctAnswerHash
+            const status = Number(task[5]);
+            const metadataStr = task[6];
+            const currentSubmissions = Number(task[8]);
 
             if (status === 2) {
                 console.log(`[Platform Admin] Task ${taskId} is already approved.`);
                 return true;
             }
 
-            if (status === 1) {
-                // 2. Validate Answer
-                console.log(`[Platform Admin] Task ${taskId} submitted. Validating answer...`);
+            if (status === 0 || status === 1) {
+                // 2. Fetch Latest Submission
+                if (currentSubmissions === 0) {
+                    console.log(`[Platform Admin] Task ${taskId} has no submissions yet. Waiting...`);
+                } else {
+                    console.log(`[Platform Admin] Task ${taskId} has ${currentSubmissions} submissions. Validating last one...`);
 
-                try {
-                    const metadata = JSON.parse(metadataStr);
-
-                    if (metadata.verification !== 'auto') {
-                        console.log(`[Platform Admin] Task ${taskId} requires manual verification. Skipping.`);
-                        return false;
-                    }
-
-                    const correctAnswer = metadata.correctAnswer?.trim().toLowerCase();
-                    const submission = workerAnswer?.trim().toLowerCase();
-
-                    if (!correctAnswer) {
-                        console.warn(`[Platform Admin] Task ${taskId} has 'auto' verification but no correct answer set.`);
-                        return false;
-                    }
-
-                    if (submission === correctAnswer) {
-                        console.log(`[Platform Admin] MATCH: '${submission}' === '${correctAnswer}'. Approving...`);
-
-                        const hash = await client.writeContract({
+                    try {
+                        // Submission struct: [address, answer, approved]
+                        const submissionIndex = BigInt(currentSubmissions - 1);
+                        const sub = await client.readContract({
                             address: CONTRACTS.TaskEscrow.address,
                             abi: CONTRACTS.TaskEscrow.abi,
-                            functionName: 'approveTask',
-                            args: [id],
-                        });
-                        console.log(`[Platform Admin] Task ${taskId} auto-approved! Hash: ${hash}`);
-                        processed = true;
-                        return hash;
-                    } else {
-                        console.log(`[Platform Admin] MISMATCH: '${submission}' !== '${correctAnswer}'. Manual review required.`);
-                        return false;
-                    }
+                            functionName: 'taskSubmissions',
+                            args: [id, submissionIndex],
+                        }) as any;
 
-                } catch (parseError) {
-                    console.error(`[Platform Admin] Failed to parse metadata for task ${taskId}`, parseError);
-                    return false;
+                        const workerAnswer = sub[1]; // Answer is at index 1
+
+                        const metadata = JSON.parse(metadataStr);
+
+                        if (metadata.ver !== 'auto' && metadata.verification !== 'auto' && metadata.verificationStrategy !== 'Instant Auto-Pay') {
+                            console.log(`[Platform Admin] Task ${taskId} requires manual verification or consensus. Skipping.`);
+                            return false;
+                        }
+
+                        const correctAnswer = metadata.correctAnswer?.trim().toLowerCase();
+                        const submission = workerAnswer?.trim().toLowerCase();
+
+                        if (!correctAnswer) {
+                            console.warn(`[Platform Admin] Task ${taskId} has 'auto' verification but no correct answer set in metadata.`);
+                            return false;
+                        }
+
+                        if (submission === correctAnswer) {
+                            console.log(`[Platform Admin] MATCH: '${submission}' === '${correctAnswer}'. Approving...`);
+
+                            const hash = await client.writeContract({
+                                address: CONTRACTS.TaskEscrow.address,
+                                abi: CONTRACTS.TaskEscrow.abi,
+                                functionName: 'approveTask',
+                                args: [id],
+                            });
+                            console.log(`[Platform Admin] Task ${taskId} auto-approved! Hash: ${hash}`);
+                            processed = true;
+                            return hash;
+                        } else {
+                            console.log(`[Platform Admin] MISMATCH: '${submission}' !== '${correctAnswer}'. Manual review or consensus required.`);
+                            return false;
+                        }
+
+                    } catch (err: any) {
+                        console.error(`[Platform Admin] Error processing validation for task ${taskId}:`, err.message);
+                        // Fallback: maybe the index is different? Non-critical, just log.
+                    }
                 }
             }
 

@@ -59,21 +59,22 @@ export function useBusinessTasks(address?: string) {
             .map((t: any) => {
                 let metadata: any = { title: 'Unknown', description: 'No description' };
                 try {
-                    metadata = JSON.parse(t[7]);
+                    metadata = JSON.parse(t[6]); // Index 6 is metadataHash
                 } catch (e) { }
                 const statusMap = ['Created', 'Submitted', 'Approved', 'Rejected', 'Cancelled'];
-                const s = Number(t[6]);
+                const s = Number(t[5]); // Index 5 is status
                 return {
                     id: Number(t[0]),
                     agency: t[1],
-                    worker: t[2],
-                    reward: (Number(t[3]) / 1e18).toFixed(2), // USDC value
-                    deposit: t[4],
-                    deadline: t[5],
+                    reward: (Number(t[2]) / 1e6).toFixed(2), // USDC (6 decimals)
+                    rewardRaw: t[2],
+                    deposit: t[3],
+                    deadline: t[4],
                     status: statusMap[s] || 'Unknown',
                     rawStatus: s,
-                    metadataHash: t[7],
-                    answer: t[8],
+                    metadataHash: t[6],
+                    requiredSubmissions: Number(t[7]),
+                    currentSubmissions: Number(t[8]),
                     title: metadata.title || 'Unknown',
                     metadata: metadata
                 };

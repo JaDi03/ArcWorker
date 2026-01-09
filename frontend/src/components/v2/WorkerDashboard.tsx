@@ -31,7 +31,7 @@ export default function WorkerDashboard() {
     const address = (eoaAddress || circleAddress) as `0x${string}`;
 
     // 1. Data Fetching
-    const { tasks: allTasks, isLoading: tasksLoading } = useTasks(address);
+    const { tasks: allTasks, isLoading: tasksLoading } = useTasks(undefined, address);
 
     const { data: savingsShares, refetch: refetchShares } = useReadContract({
         address: CONTRACTS.TaskEscrow.address,
@@ -118,8 +118,9 @@ export default function WorkerDashboard() {
     // 3. Task Processing
     const mySubmissions = useMemo(() => {
         if (!allTasks || !address) return [];
+        // Filtering by participation instead of non-existent worker field in Task struct
         return allTasks.filter((t: any) =>
-            t.worker?.toLowerCase() === address.toLowerCase() && t.status >= 1
+            t.hasParticipated && t.status >= 1
         );
     }, [allTasks, address]);
 
