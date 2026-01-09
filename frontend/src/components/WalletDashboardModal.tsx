@@ -6,6 +6,7 @@ import { CONTRACTS } from '@/utils/contracts';
 import { parseEther, formatUnits } from 'viem';
 import { useArcWorkerWallet } from '@/arcworker-sdk/wallet';
 import axios from 'axios';
+import { Eye, EyeOff, Copy } from 'lucide-react';
 
 interface WalletDashboardModalProps {
     isOpen: boolean;
@@ -60,6 +61,7 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
     // Business Savings State
     const [savingsAssets, setSavingsAssets] = useState<string>('0.00');
     const [isWithdrawing, setIsWithdrawing] = useState(false);
+    const [showAddress, setShowAddress] = useState(false);
 
     // Simplified Address & Connection
     const address = isCircle ? circleAddress : wagmiAddress;
@@ -280,7 +282,7 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
 
     useEffect(() => {
         if (rawSavingsAssets) {
-            setSavingsAssets(formatUnits(rawSavingsAssets as bigint, 18));
+            setSavingsAssets(formatUnits(rawSavingsAssets as bigint, 6));
         } else {
             setSavingsAssets('0.00');
         }
@@ -471,8 +473,16 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                     if (savedUser) {
                         try {
                             const user = JSON.parse(savedUser);
-                            if (user.username) {
-                                const fresh = await setupArcWorkerWallet(user.username, 'worker', 'circle', { skipCreation: true });
+                            if (user.username || user.userId) {
+                                // FIX: Don't force PIN flow (setupArcWorkerWallet) if user is Email-based
+                                // This causes "Ghost Wallets" (PIN wallet for Email user)
+                                if (user.walletType === 'circle' && user.authType === 'email') {
+                                    alert("Tu sesión ha expirado. Por seguridad, por favor desconecta y vuelve a iniciar sesión con tu email.");
+                                    return;
+                                }
+
+                                const targetId = user.userId || user.username;
+                                const fresh = await setupArcWorkerWallet(targetId, 'worker', 'circle', { skipCreation: true });
                                 if (fresh) {
                                     handleRegisterOnChain();
                                     return;
@@ -535,8 +545,8 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
     const savingsBalance = Number(savingsAssets);
     const totalBalance = liquidBalance + savingsBalance;
 
-    const balanceDisplay = totalBalance.toFixed(2);
-    const liquidDisplay = liquidBalance.toFixed(2);
+    const balanceDisplay = totalBalance.toFixed(6);
+    const liquidDisplay = liquidBalance.toFixed(6);
 
     const isAddressValid = resolvedAddress || (recipient.startsWith('0x') && recipient.length === 42);
 
@@ -593,31 +603,47 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                 <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                     <div>
                         <h3 className="font-bold text-slate-800 text-lg">My Wallet</h3>
-                        {currentAddressName ? (
-                            <div className="flex flex-col">
-                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">
+                        <div className="flex flex-col mt-1">
+                            {currentAddressName && (
+                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">
                                     @{currentAddressName as string}
                                 </p>
-                                <button
-                                    onClick={() => navigator.clipboard.writeText(address || '')}
-                                    className="text-[10px] text-slate-400 font-mono hover:text-blue-500 transition-colors text-left flex items-center gap-1"
-                                    title="Click to copy address"
+                            )}
+                            <div className="flex items-center gap-2">
+                                <div
+                                    className="inline-flex items-center gap-3 px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-200 transition select-none min-w-[160px] justify-between group/address"
+                                    onClick={() => setShowAddress(!showAddress)}
                                 >
-                                    {address?.substring(0, 6)}...{address?.substring(38)}
-                                    <span className="text-[8px] bg-slate-100 px-1 rounded">COPY</span>
-                                </button>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-mono text-slate-600 tracking-tight font-bold">
+                                            {showAddress
+                                                ? (address ? `${address.substring(0, 6)}...${address.substring(38)}` : '0x...')
+                                                : '****...****'
+                                            }
+                                        </span>
+                                    </div>
+                                    {showAddress ? (
+                                        <EyeOff className="w-3.5 h-3.5 text-slate-400 group-hover/address:text-slate-600 transition-colors" />
+                                    ) : (
+                                        <Eye className="w-3.5 h-3.5 text-slate-400 group-hover/address:text-slate-600 transition-colors" />
+                                    )}
+                                </div>
+
+                                {showAddress && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigator.clipboard.writeText(address || '');
+                                            alert("Address copied!");
+                                        }}
+                                        className="p-1.5 bg-slate-100 rounded-lg border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition text-slate-400"
+                                        title="Copy Address"
+                                    >
+                                        <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
                             </div>
-                        ) : (
-                            <button
-                                onClick={() => navigator.clipboard.writeText(address || '')}
-                                className="text-[10px] text-slate-400 font-mono hover:text-blue-500 transition-colors text-left flex items-center gap-1 mt-0.5"
-                                title="Click to copy address"
-                            >
-                                {address?.substring(0, 6)}...{address?.substring(38)}
-                                <span className="text-[8px] bg-slate-100 px-1 rounded">COPY</span>
-                            </button>
-                        )}
-                    </div>
+                        </div>                    </div>
                     <button
                         onClick={onClose}
                         className="w-8 h-8 flex items-center justify-center bg-slate-200 text-slate-600 rounded-full hover:bg-slate-300 transition-colors font-bold"
@@ -657,12 +683,12 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                 )}
 
                 {/* Content */}
-                <div className="flex-1 p-6 relative flex flex-col">
+                <div className="flex-1 p-6 relative flex flex-col min-h-[550px]">
                     {activeTab === 'ASSETS' && (
                         <div className="text-center py-8 flex-1">
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Total Estimated Balance</p>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Total Wallet Balance</p>
                             <h2 className="text-5xl font-black text-slate-900 mb-2 tracking-tight">
-                                ${balanceDisplay}
+                                ${liquidDisplay}
                             </h2>
 
                             <div className="mt-8 space-y-3">
@@ -683,21 +709,21 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
 
                                 {/* Business Savings Row (Funds from cancelled tasks or earnings) */}
                                 {Number(savingsAssets) > 0 && (
-                                    <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 flex flex-col space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-700">
+                                    <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100 flex flex-col space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-700">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center">
-                                                <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+                                                <div className="w-10 h-10 bg-[#005edc] rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
                                                     🏦
                                                 </div>
                                                 <div className="ml-3 text-left">
-                                                    <p className="font-bold text-indigo-900 text-sm">{isWorker ? 'Earnings Savings' : 'Business Savings'}</p>
-                                                    <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter">
+                                                    <p className="font-bold text-blue-900 text-sm">{isWorker ? 'Earnings Savings' : 'Business Savings'}</p>
+                                                    <p className="text-[9px] font-bold text-blue-400 uppercase tracking-tighter">
                                                         {isWorker ? 'Earning 5% APY effectively' : 'Refunded from cancelled tasks'}
                                                     </p>
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-black text-indigo-700 text-lg">${Number(savingsAssets).toFixed(2)}</p>
+                                                <p className="font-black text-blue-700 text-lg">${Number(savingsAssets).toFixed(6)}</p>
                                                 {isWorker && <span className="text-[8px] bg-green-200 text-green-700 px-1 rounded font-bold">5% APY</span>}
                                             </div>
                                         </div>
@@ -713,7 +739,7 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                                                 });
                                             }}
                                             disabled={isWithdrawing || isWithdrawConfirming}
-                                            className="w-full h-10 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
+                                            className="w-full h-10 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
                                         >
                                             {isWithdrawing || isWithdrawConfirming ? 'Processing...' : 'Withdraw to Wallet'}
                                         </button>

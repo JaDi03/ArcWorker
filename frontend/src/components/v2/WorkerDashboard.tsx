@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Briefcase, History, TrendingUp, Wallet, LogOut, Bell, ChevronRight, Plus, Star, CheckCircle, Clock } from 'lucide-react';
+import { LayoutDashboard, Briefcase, History, TrendingUp, Wallet, LogOut, Bell, ChevronRight, Plus, Star, CheckCircle, Clock, Eye, EyeOff, Copy } from 'lucide-react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance } from 'wagmi';
 import { CONTRACTS } from '@/utils/contracts';
 import { useTasks } from '@/hooks/useTasks';
-import { formatUnits, parseEther } from 'viem';
+import { formatUnits, parseEther, parseUnits } from 'viem';
 import { WorkerTaskFeed } from './WorkerTaskFeed';
 import WalletDashboardModal from '@/components/WalletDashboardModal';
+import { ArcWorkerCardLogo } from '@/components/ui/BrandAssets';
 
 export default function WorkerDashboard() {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'market' | 'history' | 'investments'>('dashboard');
@@ -14,6 +15,7 @@ export default function WorkerDashboard() {
     const [circleAddress, setCircleAddress] = useState<string | null>(null);
     const [user, setUser] = useState<any>(null);
     const [now, setNow] = useState(Date.now());
+    const [showAddress, setShowAddress] = useState(false); // Default hidden for privacy
 
     useEffect(() => {
         const stored = localStorage.getItem('arc_user');
@@ -32,7 +34,8 @@ export default function WorkerDashboard() {
 
     // 0. Liquid Balance Fetching
     const [liquidBalance, setLiquidBalance] = useState(0);
-    const { data: eoaBalanceData } = useBalance({
+    const [liveYield, setLiveYield] = useState<string>('0.000000');
+    const { data: eoaBalanceData, refetch: refetchWagmiBalance } = useBalance({
         address: eoaAddress,
         query: { enabled: !!eoaAddress }
     });
@@ -179,13 +182,28 @@ export default function WorkerDashboard() {
     }, [mySubmissions, approvedTasks]);
 
     // 4. Actions
-    const { writeContract: withdraw, isPending: isWithdrawing } = useWriteContract();
+    const { writeContract: withdraw, data: withdrawHash, isPending: isWithdrawPending } = useWriteContract();
+    const { isSuccess: isWithdrawSuccess, isLoading: isWithdrawConfirming } = useWaitForTransactionReceipt({ hash: withdrawHash });
+
+    const isWithdrawing = isWithdrawPending || isWithdrawConfirming;
+
+    useEffect(() => {
+        if (isWithdrawSuccess) {
+            alert("Withdrawal successful! Funds added to your wallet.");
+            refetchShares();
+            refetchWagmiBalance();
+            // Force Circle refresh if needed (though this is EOA path)
+        }
+    }, [isWithdrawSuccess, refetchShares, refetchWagmiBalance]);
 
     const handleWithdraw = async () => {
         if (stats.totalSavings <= 0) return;
 
         // Use total value for withdrawing everything
-        const amountWei = "0"; // Passing 0 triggers 'Withdraw Max' in contract
+        // Explicitly calculate max amount to withdraw to avoid "0" ambiguity
+        const amountWei = stats.totalSavings > 0
+            ? parseUnits(stats.totalSavings.toFixed(6), 6)
+            : BigInt(0);
 
         const circleUser = localStorage.getItem('arc_user');
         if (circleUser && !isConnected) {
@@ -226,7 +244,12 @@ export default function WorkerDashboard() {
 
                 alert("✅ Withdrawal Successful!");
                 refetchShares();
+                refetchShares();
             } catch (e: any) {
+                if (e.message.toLowerCase().includes("user rejected") || e.message.toLowerCase().includes("cancelled")) {
+                    // User cancelled, do nothing
+                    return;
+                }
                 alert(`Withdrawal Failed: ${e.message}`);
             }
             return;
@@ -240,46 +263,65 @@ export default function WorkerDashboard() {
         });
     };
 
+    // Real-time Yield Ticker (Fake Projections for UX)
+    useEffect(() => {
+        if (!stats.totalSavings || stats.totalSavings <= 0) return;
+
+        const baseYield = stats.yield || 0;
+        const principal = stats.totalSavings;
+        const apy = 0.05; // 5%
+        const yieldPerSecond = (principal * apy) / 31536000;
+        const updateIntervalMs = 30; // Faster updates
+        const yieldPerInterval = yieldPerSecond * (updateIntervalMs / 1000);
+
+        let accumulated = 0;
+        const interval = setInterval(() => {
+            accumulated += yieldPerInterval;
+            setLiveYield((baseYield + accumulated).toFixed(9));
+        }, updateIntervalMs);
+
+        return () => clearInterval(interval);
+    }, [stats.totalSavings, stats.yield]);
+
 
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
 
-            {/* Sidebar */}
-            <aside className="w-64 bg-white border-r border-gray-200 flex flex-col z-20 hidden md:flex">
-                <div className="h-16 flex items-center px-6 border-b border-gray-100">
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold mr-3 shadow-lg shadow-blue-200">W</div>
-                    <span className="font-bold text-xl tracking-tight text-gray-900">ArcWorker</span>
+            {/* Sidebar with Brand Gradient */}
+            <aside className="w-64 bg-gradient-to-b from-[#005edc] from-70% to-[#007a53] flex flex-col z-20 hidden md:flex text-white">
+                <div className="h-20 flex items-center justify-center border-b border-white/10 p-4">
+                    <ArcWorkerCardLogo className="w-40 h-auto filter brightness-0 invert" />
                 </div>
 
                 <nav className="flex-1 p-4 space-y-1">
                     <button
                         onClick={() => setActiveTab('dashboard')}
-                        className={`flex items-center w-full px-4 py-3 rounded-lg transition font-medium ${activeTab === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                        className={`flex items-center w-full px-4 py-3 rounded-lg transition font-medium ${activeTab === 'dashboard' ? 'bg-white/20 text-white shadow-sm' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
                     >
                         <LayoutDashboard className="w-5 h-5 mr-3" /> Dashboard
                     </button>
                     <button
                         onClick={() => setActiveTab('market')}
-                        className={`flex items-center w-full px-4 py-3 rounded-lg transition font-medium ${activeTab === 'market' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                        className={`flex items-center w-full px-4 py-3 rounded-lg transition font-medium ${activeTab === 'market' ? 'bg-white/20 text-white shadow-sm' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
                     >
                         <Briefcase className="w-5 h-5 mr-3" /> Find Work
                     </button>
                     <button
-                        onClick={() => setActiveTab('history')}
-                        className={`flex items-center w-full px-4 py-3 rounded-lg transition font-medium ${activeTab === 'history' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                        onClick={() => setActiveTab(activeTab === 'history' ? 'dashboard' : 'history')}
+                        className={`flex items-center w-full px-4 py-3 rounded-lg transition font-medium ${activeTab === 'history' ? 'bg-white/20 text-white shadow-sm' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
                     >
                         <History className="w-5 h-5 mr-3" /> Task History
                     </button>
                     <button
                         onClick={() => setActiveTab('investments')}
-                        className={`flex items-center w-full px-4 py-3 rounded-lg transition font-medium ${activeTab === 'investments' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                        className={`flex items-center w-full px-4 py-3 rounded-lg transition font-medium ${activeTab === 'investments' ? 'bg-white/20 text-white shadow-sm' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
                     >
                         <TrendingUp className="w-5 h-5 mr-3" /> Investments
-                        <span className="ml-auto bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">BETA</span>
+                        <span className="ml-auto bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10">BETA</span>
                     </button>
                     <button
                         onClick={() => setIsWalletOpen(true)}
-                        className="flex items-center w-full px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition font-medium"
+                        className="flex items-center w-full px-4 py-3 text-white/70 hover:bg-white/10 hover:text-white rounded-lg transition font-medium"
                     >
                         <Wallet className="w-5 h-5 mr-3" /> Wallet
                     </button>
@@ -290,7 +332,7 @@ export default function WorkerDashboard() {
                                 localStorage.removeItem('arc_user');
                                 window.location.href = '/';
                             }}
-                            className="flex items-center w-full px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition font-medium"
+                            className="flex items-center w-full px-4 py-3 text-white/70 hover:bg-white/10 hover:text-white rounded-lg transition font-medium"
                         >
                             <LogOut className="w-5 h-5 mr-3" /> Log Out
                         </button>
@@ -298,14 +340,14 @@ export default function WorkerDashboard() {
                 </nav>
 
                 {/* User Profile */}
-                <div className="p-4 border-t border-gray-100">
-                    <div className="flex items-center gap-3 p-4 border-t border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer transition">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-sm">
+                <div className="p-4 border-t border-white/10">
+                    <div className="flex items-center gap-3 p-4 border border-white/10 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition backdrop-blur-sm">
+                        <div className="w-10 h-10 rounded-full bg-white text-[#005edc] flex items-center justify-center font-bold shadow-sm">
                             {user?.username?.charAt(0).toUpperCase() || 'W'}
                         </div>
                         <div>
-                            <h4 className="text-sm font-bold text-gray-900 truncate w-32">{user?.username || 'Worker Account'}</h4>
-                            <p className="text-[10px] text-gray-400 font-mono truncate w-32">
+                            <h4 className="text-sm font-bold text-white truncate w-32">{user?.username || 'Worker Account'}</h4>
+                            <p className="text-[10px] text-white/70 font-mono truncate w-32">
                                 {address ? `${address.substring(0, 6)}...${address.substring(38)}` : '0x...'}
                             </p>
                         </div>
@@ -340,41 +382,83 @@ export default function WorkerDashboard() {
 
                         {/* 1. EARNINGS & WALLET SECTION */}
                         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Main Balance */}
-                            <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white rounded-2xl p-6 shadow-xl shadow-blue-200 relative overflow-hidden">
-                                <div className="absolute -top-12 -right-12 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-
-                                <div className="flex justify-between items-start mb-6 relative">
-                                    <div>
-                                        <p className="text-blue-100 text-sm font-medium mb-1">Available Balance</p>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-[10px] font-mono bg-blue-500/30 px-1.5 py-0.5 rounded text-blue-100 border border-blue-400/50">
-                                                {address ? `${address.substring(0, 6)}...${address.substring(38)}` : '0x...'}
-                                            </span>
-                                        </div>
-                                        <h2 className="text-4xl font-bold tracking-tight font-mono">
-                                            ${totalPortfolioDisplay.split('.')[0]}.
-                                            <span className="text-2xl opacity-80">{totalPortfolioDisplay.split('.')[1]}</span>
-                                        </h2>
-                                    </div>
-                                    <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                                        <TrendingUp className="w-6 h-6 text-white" />
-                                    </div>
+                            {/* Main Balance - "Deep Tech" Protocol Style */}
+                            {/* Main Balance - "Deep Tech" Protocol Style */}
+                            <div className="bg-[#005edc] text-white rounded-2xl p-6 shadow-xl shadow-blue-500/20 relative overflow-hidden border border-white/10 group">
+                                {/* Digital Grid Background Effect */}
+                                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30"></div>
+                                <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl z-0"></div>
+                                <div className="absolute top-0 right-0 p-6 opacity-30">
+                                    <ArcWorkerCardLogo className="w-32 h-auto filter brightness-0 invert" />
                                 </div>
-                                <div className="flex gap-3 relative">
-                                    <button
-                                        onClick={handleWithdraw}
-                                        disabled={isWithdrawing || stats.liquidValue <= 0}
-                                        className="flex-1 bg-white text-blue-700 py-2 rounded-lg text-sm font-bold hover:bg-blue-50 transition shadow-sm disabled:opacity-50"
-                                    >
-                                        {isWithdrawing ? 'Processing...' : 'Withdraw All'}
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('history')}
-                                        className="flex-1 bg-blue-500/50 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-500 transition border border-blue-400/30"
-                                    >
-                                        History
-                                    </button>
+
+                                <div className="relative z-10">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div>
+                                            <div className="text-blue-100 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
+                                                Your Task Earnings
+                                            </div>
+                                            <div className="flex items-center gap-2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity absolute -right-2 top-0">
+                                                {/* Hidden address on hover for clean look? Or keep it visible? Keeping simple for now */}
+                                            </div>
+                                            <h2 className="text-5xl font-black tracking-tighter font-mono text-white drop-shadow-sm">
+                                                ${(Number(stats.totalSavings || 0) + Number(liveYield)).toFixed(2).split('.')[0]}
+                                                <span className="text-3xl opacity-60 font-medium">.{(Number(stats.totalSavings || 0) + Number(liveYield)).toFixed(6).split('.')[1]}</span>
+                                            </h2>
+                                            <div className="mt-2 flex items-center gap-2">
+                                                <div
+                                                    className="inline-flex items-center gap-3 px-3 py-1.5 bg-black/20 rounded-lg border border-white/5 cursor-pointer hover:bg-black/30 transition select-none min-w-[160px] justify-between group/address"
+                                                    onClick={() => setShowAddress(!showAddress)}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <Wallet className="w-3.5 h-3.5 text-blue-200" />
+                                                        <span className="text-[11px] font-mono text-blue-100 tracking-tight">
+                                                            {showAddress
+                                                                ? (address ? `${address.substring(0, 6)}...${address.substring(38)}` : '0x...')
+                                                                : '****...****'
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                    {showAddress ? (
+                                                        <EyeOff className="w-3.5 h-3.5 text-blue-300 opacity-70 group-hover/address:text-white transition-colors" />
+                                                    ) : (
+                                                        <Eye className="w-3.5 h-3.5 text-blue-300 opacity-70 group-hover/address:text-white transition-colors" />
+                                                    )}
+                                                </div>
+
+                                                {/* Copy Button (Only visible when address is shown) */}
+                                                {showAddress && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigator.clipboard.writeText(address);
+                                                            alert("Address copied to clipboard!");
+                                                        }}
+                                                        className="p-1.5 bg-black/20 rounded-lg border border-white/5 hover:bg-white/10 transition text-blue-200 hover:text-white"
+                                                        title="Copy Address"
+                                                    >
+                                                        <Copy className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 mt-4">
+                                        <button
+                                            onClick={handleWithdraw}
+                                            disabled={isWithdrawing || stats.liquidValue <= 0}
+                                            className="flex-1 bg-white text-[#005edc] py-2.5 rounded-xl text-sm font-bold hover:bg-blue-50 transition shadow-lg shadow-black/10 disabled:opacity-50 active:scale-[0.98]"
+                                        >
+                                            {isWithdrawing ? 'Processing...' : 'Withdraw to Wallet'}
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab(activeTab === 'history' ? 'dashboard' : 'history')}
+                                            className={`px-4 py-2.5 rounded-xl text-sm font-bold transition border border-white/10 backdrop-blur-sm ${activeTab === 'history' ? 'bg-white text-[#005edc]' : 'bg-blue-800/50 text-white hover:bg-blue-800'}`}
+                                        >
+                                            <History className="w-5 h-5" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -417,9 +501,9 @@ export default function WorkerDashboard() {
 
                                 <div className="mt-4 space-y-3">
                                     <div>
-                                        <p className="text-xs text-gray-500 mb-1">Total Savings + Yields</p>
+                                        <p className="text-xs text-gray-500 mb-1">Total Protocol Savings</p>
                                         <p className="text-2xl font-bold text-gray-900 font-mono">
-                                            ${totalPortfolioDisplay}
+                                            ${(Number(stats.totalSavings || 0) + Number(liveYield)).toFixed(6)}
                                             <span className="text-sm font-normal text-gray-400 block mt-1">
                                                 Principal: ${(stats.principal || 0).toFixed(2)}
                                             </span>
@@ -429,16 +513,9 @@ export default function WorkerDashboard() {
                                         <div className="bg-blue-600 h-2 rounded-full" style={{ width: (stats.totalSavings || 0) > 0 ? `${Math.min(((stats.totalSavings || 0) / ((stats.totalSavings || 0) + 10)) * 100, 100)}%` : '0%' }}></div>
                                     </div>
                                     <p className="text-xs text-gray-500">
-                                        Accrued Yield: <span className="font-bold text-green-600">${(stats.yield || 0).toFixed(6)}</span>
+                                        Accrued Yield: <span className="font-bold text-green-600 font-mono text-lg block mt-1">${liveYield}</span>
                                     </p>
                                 </div>
-
-                                <button
-                                    onClick={() => setActiveTab('investments')}
-                                    className="mt-5 w-full py-2 border border-blue-200 text-blue-700 text-sm font-bold rounded-lg hover:bg-blue-50 transition bg-white shadow-sm"
-                                >
-                                    View Investment Details
-                                </button>
                             </div>
                         </section>
 
