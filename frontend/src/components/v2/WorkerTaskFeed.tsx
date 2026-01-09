@@ -27,9 +27,13 @@ const MODULE_INFO: Record<string, { title: string, category: 'vision' | 'nlp' | 
     'vision-bbox': { title: "Object Detection (Bounding Boxes)", category: 'vision' },
     'vision-class': { title: "Image Classification", category: 'vision' },
     'vision-seg': { title: "Semantic Segmentation", category: 'vision' },
+    'image-classification': { title: "Image Classification", category: 'vision' }, // Sync from Creator
+    'object-verification': { title: "Object Verification", category: 'vision' },   // Sync from Creator
     'nlp-ner': { title: "Named Entity Recognition (NER)", category: 'nlp' },
     'nlp-sentiment': { title: "Sentiment Analysis", category: 'nlp' },
     'nlp-trans': { title: "Translation", category: 'nlp' },
+    'text-classification': { title: "Text Classification", category: 'nlp' },      // Sync from Creator
+    'language-detection': { title: "Language Detection", category: 'nlp' },        // Sync from Creator
     'audio-transcribe': { title: "Audio Transcription", category: 'audio' },
     'audio-collect': { title: "Speech Collection", category: 'audio' },
     'data-enrich': { title: "Data Enrichment", category: 'data' },
@@ -48,6 +52,7 @@ interface TaskOpportunity {
     verification: 'Consensus' | 'Manual' | 'Golden Set' | 'Instant Auto-Pay' | 'Manual Review';
     availableTasks: number;
     tags: string[]; // Extra tags
+    metadata?: any; // Full metadata for dynamic config
 }
 
 // Mock Data is now only used as a fallback or for development
@@ -164,18 +169,22 @@ export const WorkerTaskFeed: React.FC = () => {
                 verificationLabel = 'Manual Review';
             }
 
+            const moduleId = metadata.tmpl || metadata.moduleId || metadata.mod || 'vision-class';
+            const category = MODULE_INFO[moduleId]?.category || 'vision';
+
             opportunities.push({
                 id: representative.id.toString(),
-                moduleId: metadata.moduleId || 'vision-class',
-                title: representative.title,
+                moduleId: moduleId,
+                title: metadata.title || representative.title || "Untreated Task",
                 clientName: representative.agency?.substring(0, 8) + '...',
-                description: representative.description,
+                description: metadata.desc || representative.description || "No description provided.",
                 rewardPerTask: parseFloat(representative.reward),
                 timePerTaskSec: metadata.timePerTaskSec || 45,
                 difficulty: metadata.difficulty || 'Medium',
                 verification: verificationLabel,
                 availableTasks: tasksInGroup.length,
-                tags: metadata.tags || []
+                tags: metadata.tags || [category.toUpperCase()],
+                metadata: metadata // Store for dynamic config
             });
         });
 
@@ -185,25 +194,50 @@ export const WorkerTaskFeed: React.FC = () => {
     // Only show mock tasks if there are NO real tasks from the contract at all
     const tasksToShow = (rawTasks && rawTasks.length > 0) ? availableTasks : MOCK_TASKS;
 
-    // Mock Config Generator (This would come from the smart contract metadata in production)
-    const getTaskConfig = (moduleId: string): TaskConfig => {
+    // Dynamic Config Generator based on task metadata
+    const getTaskConfig = (task: any): TaskConfig => {
+        const metadata = task.metadata || {};
+        const moduleId = metadata.tmpl || metadata.moduleId || metadata.mod || 'vision-class';
+        const instruction = metadata.desc || "Follow the prompt to complete the task.";
+
+        // Map options from metadata to classes format
+        const options: string[] = Array.isArray(metadata.options) ? metadata.options : [];
+        const classes = options.map((opt, i) => ({
+            id: opt, // Use name as ID for easier answer matching
+            name: opt,
+            color: `hsl(${(i * 137) % 360}, 70%, 50%)` // Stable random colors
+        }));
+
         switch (moduleId) {
             case 'vision-bbox':
                 return {
-                    instruction: "Draw precise boxes around all visible cereal brand logos.",
+                    instruction,
                     tools: ['draw', 'select'],
-                    classes: [
-                        { id: 1, name: 'Corn Flakes', color: '#fbbf24' },
-                        { id: 2, name: 'Cheerios', color: '#f97316' }
+                    classes: classes.length > 0 ? classes : [
+                        { id: 1, name: 'Object A', color: '#fbbf24' },
+                        { id: 2, name: 'Object B', color: '#f97316' }
                     ]
                 };
-            case 'nlp-sentiment':
+            case 'image-classification':
+            case 'vision-class':
+            case 'object-verification':
                 return {
-                    instruction: "Read the review and select the most appropriate sentiment label.",
-                    hasTranslationInput: true
+                    instruction,
+                    classes: classes
+                };
+            case 'text-classification':
+            case 'nlp-sentiment':
+            case 'language-detection':
+                return {
+                    instruction,
+                    classes: classes,
+                    hasTranslationInput: moduleId === 'nlp-trans' || moduleId === 'language-detection'
                 };
             default:
-                return { instruction: "Follow the prompt to complete the task." };
+                return {
+                    instruction,
+                    classes: classes
+                };
         }
     };
 
@@ -215,7 +249,11 @@ export const WorkerTaskFeed: React.FC = () => {
 
         try {
             setIsSubmitting(true);
-            const answer = JSON.stringify(result.output);
+
+            // Extract the most relevant answer string for on-chain verification
+            const answer = result.output.classification || result.output.text || "";
+
+            console.log(`[Worker Feed] Submitting answer: "${answer}" for Task #${selectedTask.id}`);
 
             if (isConnected) {
                 // EOA Flow
@@ -284,21 +322,24 @@ export const WorkerTaskFeed: React.FC = () => {
 
     if (selectedTask) {
         const metadata = selectedTask.metadata || {};
+        const isVision = selectedTask.moduleId?.includes('vision') || selectedTask.moduleId?.includes('image') || selectedTask.moduleId?.includes('object');
+        const isNLP = selectedTask.moduleId?.includes('nlp') || selectedTask.moduleId?.includes('text') || selectedTask.moduleId?.includes('language');
+
         const taskData: TaskData = {
             id: selectedTask.id.toString(),
-            type: selectedTask.moduleId?.startsWith('vision') ? 'vision' : selectedTask.moduleId?.startsWith('nlp') ? 'nlp' : 'form',
+            type: isVision ? 'vision' : isNLP ? 'nlp' : 'form',
             title: selectedTask.title,
             subtitle: selectedTask.clientName || 'Agency',
             reward: `$${selectedTask.rewardPerTask || selectedTask.reward} USDC`,
             verificationType: selectedTask.verification,
-            imageUrl: metadata.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
-            textContent: metadata.textContent || "Loading task content..."
+            imageUrl: metadata.content || metadata.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
+            textContent: metadata.content || metadata.textContent || "Loading task content..."
         };
 
         return (
             <WorkerTaskInterface
                 task={taskData}
-                config={getTaskConfig(selectedTask.moduleId)}
+                config={getTaskConfig(selectedTask)}
                 onExit={() => setSelectedTask(null)}
                 onSubmit={handleSubmission}
             />
@@ -396,9 +437,9 @@ export const WorkerTaskFeed: React.FC = () => {
                                             </span>
                                         </div>
 
-                                        <div className="flex items-baseline gap-3">
-                                            <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-600 transition-colors truncate">{task.title}</h3>
-                                            <p className="text-gray-500 text-xs truncate flex-1">{task.description}</p>
+                                        <div className="flex flex-col gap-1">
+                                            <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{task.title}</h3>
+                                            <p className="text-gray-500 text-xs leading-relaxed">{task.description}</p>
                                         </div>
 
                                         {/* Tags Row - Compact */}

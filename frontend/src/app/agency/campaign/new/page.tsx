@@ -169,29 +169,23 @@ export default function CampaignCreatorPage() {
                     return;
                 }
 
-                // Configure SDK with app settings and authentication
-                sdk.setAppSettings({ appId: data.appId || process.env.NEXT_PUBLIC_CIRCLE_APP_ID || '' });
+                // CRÍTICO: Siempre priorizar lo que viene de la API ya que es lo que se usó para crear el challenge.
+                const finalUserToken = data.userToken || userToken;
+                const finalEncryptionKey = data.encryptionKey || encryptionKey || (typeof window !== 'undefined' ? localStorage.getItem('arc_encryption_key') : undefined);
+                const finalAppId = data.appId || process.env.NEXT_PUBLIC_CIRCLE_APP_ID || '';
 
-                // CRÍTICO: Usar userToken y encryptionKey que recibimos como parámetros
-                // El servidor solo devuelve challengeId, no devuelve userToken ni encryptionKey
-                const authPayload: any = { userToken: userToken || data.userToken };
-                if (encryptionKey) {
-                    authPayload.encryptionKey = encryptionKey;
-                } else if (data.encryptionKey) {
-                    authPayload.encryptionKey = data.encryptionKey;
-                } else {
-                    const localKey = localStorage.getItem('arc_encryption_key');
-                    if (localKey) authPayload.encryptionKey = localKey;
-                }
-
-                console.log('[Circle SDK] Configurando autenticación:', {
-                    hasUserToken: !!authPayload.userToken,
-                    hasEncryptionKey: !!authPayload.encryptionKey,
-                    userTokenSource: userToken ? 'parameter' : 'data',
-                    encryptionKeySource: encryptionKey ? 'parameter' : (data.encryptionKey ? 'data' : 'localStorage')
+                console.log('[Circle SDK] Configurando Autenticación:', {
+                    appId: finalAppId ? `${finalAppId.substring(0, 8)}...` : 'MISSING',
+                    tokenSource: data.userToken ? 'API' : 'Parameter',
+                    hasToken: !!finalUserToken,
+                    challengeId: data.challengeId ? `${data.challengeId.substring(0, 8)}...` : 'MISSING'
                 });
 
-                sdk.setAuthentication(authPayload);
+                sdk.setAppSettings({ appId: finalAppId });
+                sdk.setAuthentication({
+                    userToken: finalUserToken,
+                    encryptionKey: finalEncryptionKey || undefined
+                });
 
                 // Execute the challenge
                 sdk.execute(data.challengeId, (error, result) => {
@@ -241,10 +235,12 @@ export default function CampaignCreatorPage() {
     const handleDeploy = async () => {
         const metadata = JSON.stringify({
             title: campaignConfig.title,
-            desc: campaignConfig.description,
-            mod: activeModuleId,
+            desc: campaignConfig.instructions || campaignConfig.description, // Prioritize instructions for worker
+            tmpl: activeModuleId, // Worker Feed expects 'tmpl'
             diff: campaignConfig.difficulty,
             ver: campaignConfig.verificationStrategy,
+            content: campaignConfig.datasetUrl || campaignConfig.textDatasetUrl || campaignConfig.audioDatasetUrl || campaignConfig.sourceDataUrl || "",
+            options: campaignConfig.classificationOptions || campaignConfig.labels || [],
             timestamp: new Date().toISOString()
         });
 

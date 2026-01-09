@@ -70,6 +70,7 @@ export const AgencyDashboard: React.FC = () => {
 
     const { tasks: agencyTasks, isLoading, refetch, allTasksCount, readError, actualContractCount } = useTasks(combinedAddresses);
     const [activeView, setActiveView] = useState<'overview' | 'review' | 'settings'>('overview');
+    const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
     const [isWalletOpen, setIsWalletOpen] = useState(false);
 
     // Group tasks by NORMALIZED TITLE to merge batches
@@ -92,8 +93,9 @@ export const AgencyDashboard: React.FC = () => {
         agencyTasks.forEach((t: any) => {
             // NORMALIZE: Merge "Demo ", "Demo", and "demo" into one key
             const cleanTitle = (t.title && t.title !== 'Unknown') ? t.title.trim() : null;
-            // Use title key (lowercase for safety) or hash fallback
-            const key = cleanTitle ? cleanTitle.toLowerCase() : (`Campaign-${t.id}`);
+            // Group by Title + MetadataHash to keep separate deployments distinct
+            const groupKey = cleanTitle ? `${cleanTitle.toLowerCase()}-${t.metadataHash || 'raw'}` : `Task-${t.id}`;
+            const key = groupKey;
 
             if (!groups[key]) {
                 groups[key] = {
@@ -475,7 +477,10 @@ export const AgencyDashboard: React.FC = () => {
                                                     >
                                                         <XCircle className="w-5 h-5" />
                                                     </button>
-                                                    <button className="text-gray-400 hover:text-gray-900 p-1 hover:bg-gray-100 rounded">
+                                                    <button
+                                                        onClick={() => setSelectedCampaign(camp)}
+                                                        className="text-gray-400 hover:text-gray-900 p-1 hover:bg-gray-100 rounded"
+                                                    >
                                                         <MoreHorizontal className="w-5 h-5" />
                                                     </button>
                                                 </td>
@@ -483,6 +488,81 @@ export const AgencyDashboard: React.FC = () => {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Campaign Detail Modal */}
+                    {selectedCampaign && (
+                        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in duration-200">
+                                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-gray-900">{selectedCampaign.title}</h3>
+                                        <p className="text-xs text-gray-500 uppercase font-semibold tracking-widest mt-1">Campaign Details</p>
+                                    </div>
+                                    <button onClick={() => setSelectedCampaign(null)} className="p-2 hover:bg-gray-200 rounded-full transition">
+                                        <XCircle className="w-6 h-6 text-gray-400" />
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                            <p className="text-xs text-blue-600 font-bold uppercase mb-1">Total Tasks</p>
+                                            <p className="text-2xl font-black text-blue-900">{selectedCampaign.count}</p>
+                                        </div>
+                                        <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                                            <p className="text-xs text-green-600 font-bold uppercase mb-1">Reward/Task</p>
+                                            <p className="text-2xl font-black text-green-900">${selectedCampaign.reward} <span className="text-xs font-normal">USDC</span></p>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 tracking-wider">Instructions for Workers</h4>
+                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-sm italic text-gray-700 leading-relaxed shadow-sm">
+                                            {selectedCampaign.metadata?.desc || selectedCampaign.description || "No specific instructions provided."}
+                                        </div>
+                                    </div>
+
+                                    {selectedCampaign.metadata?.options && Array.isArray(selectedCampaign.metadata.options) && selectedCampaign.metadata.options.length > 0 && (
+                                        <div>
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 tracking-wider">Options (Classes)</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {selectedCampaign.metadata.options.map((opt: string, i: number) => (
+                                                    <span key={i} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-600 shadow-sm">
+                                                        {opt}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {selectedCampaign.metadata?.content && (
+                                        <div>
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 tracking-wider">Dataset / Content</h4>
+                                            <div className="p-3 bg-gray-900 rounded-lg text-blue-400 font-mono text-xs break-all border border-gray-800">
+                                                {selectedCampaign.metadata.content}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                                        <div className="text-xs text-gray-400">
+                                            <p>Agency: <span className="font-mono">{selectedCampaign.agency?.slice(0, 10) || 'Unknown'}...</span></p>
+                                            <p>Status: <span className="font-bold text-green-600">{selectedCampaign.status || 'Active'}</span></p>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                handleCancelCampaign(selectedCampaign.title);
+                                                setSelectedCampaign(null);
+                                            }}
+                                            className="px-4 py-2 bg-red-50 text-red-600 text-sm font-bold rounded-lg hover:bg-red-100 transition"
+                                        >
+                                            Cancel Campaign
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}

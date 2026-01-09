@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
-import { parseEther } from 'viem';
+import { parseEther, keccak256, encodePacked } from 'viem';
 import { CONTRACTS } from '../utils/contracts';
 import { ensureCircleSession, getCircleUserId } from '../utils/circleSession';
 import { W3SSdk } from '@circle-fin/w3s-pw-web-sdk';
@@ -150,17 +150,24 @@ export function CreateCampaignModal({ isOpen, onClose, onSubmit }: CreateCampaig
     const handleViaCircle = async (userId: string | undefined, userToken: string | undefined, totalValue: string, totalSeconds: number, metadata: string) => {
         try {
             setIsCircleLoading(true);
-            const args = [
-                parseEther(formData.reward).toString(), // Reward in Wei
-                formData.quantity.toString(),        // Multi-task Batch Support
-                totalSeconds.toString(),
-                metadata
-            ];
+            const correctAnswerHash = formData.verification === 'auto' && formData.correctAnswer
+                ? keccak256(encodePacked(['string'], [formData.correctAnswer]))
+                : "0x0000000000000000000000000000000000000000000000000000000000000000";
 
             const res = await fetch('/api/circle/create-campaign', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, userToken, args, amount: totalValue })
+                body: JSON.stringify({
+                    userId,
+                    userToken,
+                    amount: totalValue,
+                    rewardPerTask: formData.reward,
+                    taskCount: formData.quantity,
+                    deadlineDays: formData.days || 7,
+                    metadataHash: metadata,
+                    requiredSubmissions: 1, // Default to 1 for now
+                    correctAnswerHash
+                })
             });
 
             const data = await res.json();
@@ -209,13 +216,24 @@ export function CreateCampaignModal({ isOpen, onClose, onSubmit }: CreateCampaig
             difficulty: formData.difficulty
         });
 
+        const correctAnswerHash = formData.verification === 'auto' && formData.correctAnswer
+            ? keccak256(encodePacked(['string'], [formData.correctAnswer]))
+            : "0x0000000000000000000000000000000000000000000000000000000000000000";
+
         // Si está conectado con wallet, usar wagmi directamente
         if (isConnected) {
             writeContract({
                 address: CONTRACTS.TaskEscrow.address,
                 abi: CONTRACTS.TaskEscrow.abi,
                 functionName: 'createTasksBatch',
-                args: [parseEther(formData.reward), BigInt(formData.quantity || 1), BigInt(totalSeconds), metadata],
+                args: [
+                    parseEther(formData.reward),
+                    BigInt(formData.quantity || 1),
+                    BigInt(totalSeconds),
+                    metadata,
+                    BigInt(1), // requiredSubmissions
+                    correctAnswerHash
+                ],
                 value: parseEther(totalValue)
             });
             return;

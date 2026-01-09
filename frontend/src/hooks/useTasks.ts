@@ -127,9 +127,9 @@ export function useTasks(addressOrAddresses?: string | string[]) {
     }, [rawTasks]);
 
     const filteredTasks = useMemo(() => {
-        if (addresses.length === 0) return [];
+        if (addresses.length === 0) return allTasks;
         const lowerAddresses = addresses.map((a: any) => a?.toLowerCase()).filter(Boolean);
-        if (lowerAddresses.length === 0) return [];
+        if (lowerAddresses.length === 0) return allTasks;
 
         return allTasks.filter((t: any) => {
             const agencyAddr = t.agency?.toLowerCase();

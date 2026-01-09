@@ -32,11 +32,28 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
             if (file) {
                 setFileName(file.name);
                 setUploadStatus('uploading');
-                // Simulate upload
-                setTimeout(() => {
-                    setUploadStatus('success');
-                    onChange({ datasetUrl: `file://${file.name}` });
-                }, 1500);
+
+                const data = new FormData();
+                data.append('file', file);
+
+                fetch('/api/upload', {
+                    method: 'POST',
+                    body: data
+                })
+                    .then(res => res.json())
+                    .then(result => {
+                        if (result.url) {
+                            setUploadStatus('success');
+                            onChange({ datasetUrl: result.url });
+                        } else {
+                            throw new Error("No URL returned");
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Upload failed:", err);
+                        setUploadStatus('idle');
+                        alert("Image upload failed. Please try again.");
+                    });
             }
         };
 
@@ -128,10 +145,27 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
             if (file) {
                 setFileName(file.name);
                 setUploadStatus('uploading');
-                setTimeout(() => {
-                    setUploadStatus('success');
-                    onChange({ textDatasetUrl: `file://${file.name}` });
-                }, 1200);
+
+                const data = new FormData();
+                data.append('file', file);
+
+                fetch('/api/upload', {
+                    method: 'POST',
+                    body: data
+                })
+                    .then(res => res.json())
+                    .then(result => {
+                        if (result.url) {
+                            setUploadStatus('success');
+                            onChange({ textDatasetUrl: result.url });
+                        } else {
+                            throw new Error("No URL returned");
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Text upload failed:", err);
+                        setUploadStatus('idle');
+                    });
             }
         };
 
@@ -166,10 +200,27 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
             if (file) {
                 setFileName(file.name);
                 setUploadStatus('uploading');
-                setTimeout(() => {
-                    setUploadStatus('success');
-                    onChange({ audioDatasetUrl: `file://${file.name}` });
-                }, 1500);
+
+                const data = new FormData();
+                data.append('file', file);
+
+                fetch('/api/upload', {
+                    method: 'POST',
+                    body: data
+                })
+                    .then(res => res.json())
+                    .then(result => {
+                        if (result.url) {
+                            setUploadStatus('success');
+                            onChange({ audioDatasetUrl: result.url });
+                        } else {
+                            throw new Error("No URL returned");
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Audio upload failed:", err);
+                        setUploadStatus('idle');
+                    });
             }
         };
 
@@ -204,10 +255,27 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
             if (file) {
                 setFileName(file.name);
                 setUploadStatus('uploading');
-                setTimeout(() => {
-                    setUploadStatus('success');
-                    onChange({ sourceDataUrl: `file://${file.name}` });
-                }, 1000);
+
+                const data = new FormData();
+                data.append('file', file);
+
+                fetch('/api/upload', {
+                    method: 'POST',
+                    body: data
+                })
+                    .then(res => res.json())
+                    .then(result => {
+                        if (result.url) {
+                            setUploadStatus('success');
+                            onChange({ sourceDataUrl: result.url });
+                        } else {
+                            throw new Error("No URL returned");
+                        }
+                    })
+                    .catch(err => {
+                        console.error("CSV upload failed:", err);
+                        setUploadStatus('idle');
+                    });
             }
         };
 
