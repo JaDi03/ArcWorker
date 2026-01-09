@@ -299,13 +299,15 @@ export default function WorkerDashboard() {
 
                 {/* User Profile */}
                 <div className="p-4 border-t border-gray-100">
-                    <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition">
+                    <div className="flex items-center gap-3 p-4 border-t border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer transition">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-sm">
                             {user?.username?.charAt(0).toUpperCase() || 'W'}
                         </div>
                         <div>
                             <h4 className="text-sm font-bold text-gray-900 truncate w-32">{user?.username || 'Worker Account'}</h4>
-                            <p className="text-xs text-gray-500">Level {Math.floor(approvedTasks.length / 5) + 1} Contributor</p>
+                            <p className="text-[10px] text-gray-400 font-mono truncate w-32">
+                                {address ? `${address.substring(0, 6)}...${address.substring(38)}` : '0x...'}
+                            </p>
                         </div>
                     </div>
                 </div>

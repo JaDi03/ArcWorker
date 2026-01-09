@@ -135,6 +135,23 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
         return Array.from(addrs);
     }, [socialMemos]);
 
+    const [contacts, setContacts] = useState<any[]>([]);
+
+    useEffect(() => {
+        const stored = localStorage.getItem('arc_contacts');
+        if (stored) setContacts(JSON.parse(stored));
+    }, [isOpen]);
+
+    const addToContacts = (addr: string, name?: string) => {
+        const stored = localStorage.getItem('arc_contacts');
+        let list = stored ? JSON.parse(stored) : [];
+        list = list.filter((c: any) => c.address.toLowerCase() !== addr.toLowerCase());
+        list.unshift({ address: addr, name: name || '', lastUsed: Date.now() });
+        list = list.slice(0, 5);
+        localStorage.setItem('arc_contacts', JSON.stringify(list));
+        setContacts(list);
+    };
+
     const { data: resolvedMemoNames } = useReadContracts({
         contracts: uniqueMemoAddresses.map((addr: string) => ({
             address: CONTRACTS.UserRegistry.address,
@@ -332,6 +349,7 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
             try {
                 await sendCircleTransfer(target, amount, 'USDC', memo);
                 setIsCircleSuccess(true);
+                addToContacts(target, recipient.startsWith('@') ? recipient.substring(1) : undefined);
                 fetchCircleBalance();
                 setMemo(''); // Clear memo
             } catch (err) {
@@ -356,6 +374,7 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                         memo: memo
                     });
                 }
+                addToContacts(target, recipient.startsWith('@') ? recipient.substring(1) : undefined);
                 setMemo('');
             } catch (err) {
                 console.error("Manual Send Error Catch:", err);
@@ -574,10 +593,29 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                 <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                     <div>
                         <h3 className="font-bold text-slate-800 text-lg">My Wallet</h3>
-                        {currentAddressName && (
-                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">
-                                @{currentAddressName as string}
-                            </p>
+                        {currentAddressName ? (
+                            <div className="flex flex-col">
+                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">
+                                    @{currentAddressName as string}
+                                </p>
+                                <button
+                                    onClick={() => navigator.clipboard.writeText(address || '')}
+                                    className="text-[10px] text-slate-400 font-mono hover:text-blue-500 transition-colors text-left flex items-center gap-1"
+                                    title="Click to copy address"
+                                >
+                                    {address?.substring(0, 6)}...{address?.substring(38)}
+                                    <span className="text-[8px] bg-slate-100 px-1 rounded">COPY</span>
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => navigator.clipboard.writeText(address || '')}
+                                className="text-[10px] text-slate-400 font-mono hover:text-blue-500 transition-colors text-left flex items-center gap-1 mt-0.5"
+                                title="Click to copy address"
+                            >
+                                {address?.substring(0, 6)}...{address?.substring(38)}
+                                <span className="text-[8px] bg-slate-100 px-1 rounded">COPY</span>
+                            </button>
                         )}
                     </div>
                     <button
@@ -714,6 +752,28 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                                             onChange={(e) => setRecipient(e.target.value)}
                                             className="w-full p-4 bg-slate-50 rounded-2xl font-mono text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 transition-all border border-transparent focus:border-blue-500"
                                         />
+
+                                        {contacts.length > 0 && recipient.length === 0 && (
+                                            <div className="mt-4 animate-in fade-in">
+                                                <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mb-2">Recent</p>
+                                                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+                                                    {contacts.map((c, i) => (
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => setRecipient(c.name ? `@${c.name}` : c.address)}
+                                                            className="flex items-center gap-2 p-2 bg-white border border-slate-100 rounded-lg hover:border-blue-300 transition shrink-0 shadow-sm"
+                                                        >
+                                                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold">
+                                                                {c.name ? c.name[0].toUpperCase() : '0x'}
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="text-xs font-bold text-slate-700">{c.name ? `@${c.name}` : `${c.address.substring(0, 6)}...`}</p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Resolution Feedback */}
                                         <div className="h-6 mt-2">

@@ -514,7 +514,7 @@ export const AgencyDashboard: React.FC = () => {
                                         </div>
                                         <div className="bg-green-50 p-4 rounded-xl border border-green-100">
                                             <p className="text-xs text-green-600 font-bold uppercase mb-1">Reward/Task</p>
-                                            <p className="text-2xl font-black text-green-900">${selectedCampaign.reward} <span className="text-xs font-normal">USDC</span></p>
+                                            <p className="text-2xl font-black text-green-900">${parseFloat(selectedCampaign.reward).toString()} <span className="text-xs font-normal">USDC</span></p>
                                         </div>
                                     </div>
 
