@@ -347,6 +347,11 @@ export default function WorkerDashboard() {
                                 <div className="flex justify-between items-start mb-6 relative">
                                     <div>
                                         <p className="text-blue-100 text-sm font-medium mb-1">Available Balance</p>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-[10px] font-mono bg-blue-500/30 px-1.5 py-0.5 rounded text-blue-100 border border-blue-400/50">
+                                                {address ? `${address.substring(0, 6)}...${address.substring(38)}` : '0x...'}
+                                            </span>
+                                        </div>
                                         <h2 className="text-4xl font-bold tracking-tight font-mono">
                                             ${totalPortfolioDisplay.split('.')[0]}.
                                             <span className="text-2xl opacity-80">{totalPortfolioDisplay.split('.')[1]}</span>

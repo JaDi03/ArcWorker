@@ -280,7 +280,7 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
 
     useEffect(() => {
         if (rawSavingsAssets) {
-            setSavingsAssets(formatUnits(rawSavingsAssets as bigint, 6));
+            setSavingsAssets(formatUnits(rawSavingsAssets as bigint, 18));
         } else {
             setSavingsAssets('0.00');
         }
