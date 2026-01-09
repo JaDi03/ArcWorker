@@ -13,6 +13,7 @@ import { useAccount, useWriteContract } from 'wagmi';
 import { parseEther, parseUnits } from 'viem';
 import { CONTRACTS } from '@/utils/contracts';
 import { getSdk } from '@/utils/circle';
+import { ensureCircleSession, getCircleUserId } from '@/utils/circleSession';
 
 // Define the structure of our modules - synced with HTML IDs & Logic
 const MODULES = {
@@ -25,7 +26,7 @@ const MODULES = {
         'vision-class': {
             title: 'Image Classification',
             desc: 'Categorize images into predefined classes.',
-            components: ['campaign-info', 'upload-image', 'labels-creator', 'instructions-vision', 'difficulty-selector', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'upload-image', 'labels-creator', 'instructions-vision', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         },
         'vision-seg': {
             title: 'Semantic Segmentation',
@@ -116,24 +117,42 @@ export default function CampaignCreatorPage() {
 
     const currentModule = getCurrentModuleConfig();
 
-    const handleViaCircle = async (userId: string | undefined, userToken: string | undefined, totalValue: string, totalSeconds: number, metadata: string) => {
+    const handleViaCircle = async (
+        userId: string | undefined,
+        userToken: string | undefined,
+        encryptionKey: string | undefined,
+        totalValue: string,
+        deadlineSeconds: number,
+        metadata: string,
+        requiredSubmissions: number,
+        correctAnswerHash: string
+    ) => {
         try {
             setIsCircleLoading(true);
-            const args = [
-                parseUnits((campaignConfig.rewardPerTask || 0.15).toString(), 6).toString(),
-                (campaignConfig.totalTasks || 10).toString(), // Match new default
-                totalSeconds.toString(),
-                metadata
-            ];
 
-            console.log("Creating Campaign via Circle...", { userId, args, totalValue });
+            console.log("Creating Campaign via Circle...", { userId, totalValue, requiredSubmissions });
             const res = await fetch('/api/circle/create-campaign', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, userToken, args, amount: totalValue })
+                body: JSON.stringify({
+                    userId,
+                    userToken,
+                    amount: totalValue,
+                    rewardPerTask: (campaignConfig.rewardPerTask || 0.15).toString(),
+                    taskCount: (campaignConfig.totalTasks || 10).toString(),
+                    deadlineDays: Math.ceil(deadlineSeconds / 86400),
+                    metadataHash: metadata,
+                    requiredSubmissions,
+                    correctAnswerHash
+                })
             });
 
             const data = await res.json();
+
+            if (data.userToken) {
+                localStorage.setItem('arc_session_token', data.userToken);
+                if (data.encryptionKey) localStorage.setItem('arc_encryption_key', data.encryptionKey);
+            }
 
             if (!res.ok) {
                 alert(`Campaign Creation Failed: ${data.message || data.error}`);
@@ -153,13 +172,25 @@ export default function CampaignCreatorPage() {
                 // Configure SDK with app settings and authentication
                 sdk.setAppSettings({ appId: data.appId || process.env.NEXT_PUBLIC_CIRCLE_APP_ID || '' });
 
-                const authPayload: any = { userToken: data.userToken };
-                if (data.encryptionKey) {
+                // CRÍTICO: Usar userToken y encryptionKey que recibimos como parámetros
+                // El servidor solo devuelve challengeId, no devuelve userToken ni encryptionKey
+                const authPayload: any = { userToken: userToken || data.userToken };
+                if (encryptionKey) {
+                    authPayload.encryptionKey = encryptionKey;
+                } else if (data.encryptionKey) {
                     authPayload.encryptionKey = data.encryptionKey;
                 } else {
                     const localKey = localStorage.getItem('arc_encryption_key');
                     if (localKey) authPayload.encryptionKey = localKey;
                 }
+
+                console.log('[Circle SDK] Configurando autenticación:', {
+                    hasUserToken: !!authPayload.userToken,
+                    hasEncryptionKey: !!authPayload.encryptionKey,
+                    userTokenSource: userToken ? 'parameter' : 'data',
+                    encryptionKeySource: encryptionKey ? 'parameter' : (data.encryptionKey ? 'data' : 'localStorage')
+                });
+
                 sdk.setAuthentication(authPayload);
 
                 // Execute the challenge
@@ -219,21 +250,39 @@ export default function CampaignCreatorPage() {
 
         // Calculate total with 5% platform fee
         const rewardPerTask = campaignConfig.rewardPerTask || 0.15;
-        const totalTasks = campaignConfig.totalTasks || 10; // Match new default
-        const subtotal = rewardPerTask * totalTasks;
+        const totalTasks = campaignConfig.totalTasks || 10;
+        const workersPerTask = campaignConfig.workersPerTask || 1;
+
+        const subtotal = rewardPerTask * totalTasks * workersPerTask;
         const fee = subtotal * 0.05; // 5% platform fee
         const totalValue = (subtotal + fee).toFixed(6); // Total including fee
+        const totalValueInAtoms = parseUnits(totalValue, 6);
 
-        const totalSeconds = 604800; // 7 days deadline for tasks
+        // 2. Prepare Contract Arguments
+        const rewardInAtoms = BigInt(Math.round(rewardPerTask * 1e6));
+        const totalCount = BigInt(totalTasks);
+        const deadline = BigInt(7) * BigInt(24) * BigInt(3600); // 7 days
+        const metadataHash = metadata;
+        const requiredSubmissions = BigInt(workersPerTask);
+
+        // Generate hash for Golden Set if answer provided
+        let correctAnswerHash = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        if (campaignConfig.correctAnswer) {
+            const { keccak256, encodePacked } = await import('viem');
+            correctAnswerHash = keccak256(encodePacked(['string'], [campaignConfig.correctAnswer]));
+        }
+
+        console.log(`[Campaign] Deploying with ${requiredSubmissions} workers per task. Golden Set: ${campaignConfig.correctAnswer ? 'YES' : 'NO'}`);
 
         if (isConnected) {
             try {
+                // EOA Flow
                 writeContract({
                     address: CONTRACTS.TaskEscrow.address,
                     abi: CONTRACTS.TaskEscrow.abi,
                     functionName: 'createTasksBatch',
-                    args: [parseUnits(rewardPerTask.toString(), 6), BigInt(totalTasks), BigInt(totalSeconds), metadata],
-                    value: parseUnits(totalValue, 6)
+                    args: [rewardInAtoms, totalCount, deadline, metadataHash, requiredSubmissions, correctAnswerHash as `0x${string}`],
+                    value: totalValueInAtoms,
                 });
             } catch (e: any) {
                 alert("Transaction failed: " + e.message);
@@ -242,29 +291,39 @@ export default function CampaignCreatorPage() {
         }
 
         // Circle / Email Logic
-        const circleUser = localStorage.getItem('arc_user');
-        const sessionToken = localStorage.getItem('arc_session_token');
+        const userId = getCircleUserId();
+        if (!userId) {
+            alert("No session found. Please login again.");
+            return;
+        }
 
-        if (circleUser) {
-            try {
-                const user = JSON.parse(circleUser);
-                const userId = user.id || user.userId;
-                const encryptionKey = localStorage.getItem('arc_encryption_key');
+        try {
+            setIsCircleLoading(true);
 
-                if (sessionToken && encryptionKey) {
-                    await handleViaCircle(userId, sessionToken, totalValue, totalSeconds, metadata);
-                    return;
-                }
-                if (userId && !userId.includes('@')) {
-                    await handleViaCircle(userId, undefined, totalValue, totalSeconds, metadata);
-                    return;
-                }
-                alert("Security session expired. Please log out and back in once.");
-            } catch (e) {
-                console.error(e);
+            // 1. Ensure valid session (auto-renews if expired)
+            const session = await ensureCircleSession(userId);
+            if (!session) {
+                alert("Could not renew Circle session. Please login again.");
+                setIsCircleLoading(false);
+                return;
             }
-        } else {
-            alert("No wallet connected. Please connect MetaMask or Log In.");
+
+            // 2. Call Contract via Circle
+            await handleViaCircle(
+                userId,
+                session.userToken,
+                session.encryptionKey,
+                totalValue,
+                Number(deadline),
+                metadataHash,
+                Number(requiredSubmissions),
+                correctAnswerHash
+            );
+        } catch (e: any) {
+            console.error("[Campaign] Circle Deploy Error:", e);
+            alert("Circle Transaction failed: " + e.message);
+        } finally {
+            setIsCircleLoading(false);
         }
     };
 

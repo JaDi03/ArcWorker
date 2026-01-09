@@ -11,7 +11,10 @@ import {
     Play,
     SkipForward,
     Mic,
-    Loader2
+    Loader2,
+    Zap,
+    Clock,
+    Users
 } from 'lucide-react';
 
 export interface TaskData {
@@ -20,6 +23,7 @@ export interface TaskData {
     title: string;
     subtitle?: string;
     reward?: string;
+    verificationType?: string;
 
     // Data payloads
     imageUrl?: string;
@@ -237,6 +241,17 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                                 {task.type}
                             </span>
                             <span>{task.title}</span>
+                            {task.verificationType && (
+                                <span className={`px-2 py-0.5 rounded flex items-center gap-1 text-[10px] font-bold border ${task.verificationType === 'Instant Auto-Pay' ? 'bg-emerald-950 text-emerald-400 border-emerald-800' :
+                                        task.verificationType === 'Consensus' ? 'bg-blue-950 text-blue-400 border-blue-800' :
+                                            'bg-gray-800 text-gray-400 border-gray-700'
+                                    }`}>
+                                    {task.verificationType === 'Instant Auto-Pay' ? <Zap className="w-2.5 h-2.5 fill-emerald-500" /> :
+                                        task.verificationType === 'Consensus' ? <Users className="w-2.5 h-2.5" /> :
+                                            <Clock className="w-2.5 h-2.5" />}
+                                    {task.verificationType}
+                                </span>
+                            )}
                         </h1>
                         <p className="text-xs text-gray-400">
                             {task.subtitle} {task.reward && <span className="text-green-400 font-mono">• {task.reward}</span>}
@@ -295,8 +310,8 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                                     key={cls.id}
                                     onClick={() => setSelectedClassId(cls.id)}
                                     className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition mb-2 ${selectedClassId === cls.id
-                                            ? 'border-blue-500 bg-gray-800'
-                                            : 'border-gray-800 bg-gray-800/50 hover:bg-gray-800'
+                                        ? 'border-blue-500 bg-gray-800'
+                                        : 'border-gray-800 bg-gray-800/50 hover:bg-gray-800'
                                         }`}
                                 >
                                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cls.color || '#ccc' }}></div>

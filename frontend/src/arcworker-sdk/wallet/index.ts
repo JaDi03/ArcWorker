@@ -29,13 +29,10 @@ function getSdk() {
     const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
     if (!window.__circle_sdk_instance) {
-        console.log("[ArcWorker SDK] Initializing W3SSdk with App ID:", appId);
-
         const onLoginComplete = (error: any, result: any) => {
             if (error) {
-                console.error("[ArcWorker SDK] GLOBAL CALLBACK ERROR:", JSON.stringify(error, null, 2));
-            } else {
-                console.log("[ArcWorker SDK] GLOBAL CALLBACK SUCCESS:", result);
+                // Keep error logs but minimize them
+                console.error("[ArcWorker SDK] Auth Error:", error.message || error);
             }
 
             // Store result in case no listener is ready yet
@@ -323,13 +320,11 @@ export function useArcWorkerWallet() {
     const preFetch = useCallback(async () => {
         try {
             const sdk = getSdk();
-            if (sdk && !preFetchedDeviceId) {
+            if (sdk) {
                 const dId = await sdk.getDeviceId();
                 setPreFetchedDeviceId(dId);
             }
-        } catch (e) {
-            // Silently fail pre-fetch, it will retry during actual login if needed
-        }
+        } catch (e) { }
     }, [preFetchedDeviceId]);
 
     // Initial pre-fetch side effect
@@ -462,7 +457,12 @@ export function useArcWorkerWallet() {
                         else resolve(result);
                     });
                 });
-                return { success: true };
+                // After executing challenge, try to return current state
+                return {
+                    address: localStorage.getItem('arc_wallet_address') || '',
+                    userToken: finalToken,
+                    userId: localStorage.getItem('arc_circle_user_id') || email
+                };
             }
 
             customizeSDKUI("Setup Pin", "Create your 6-digit security PIN");
@@ -552,7 +552,7 @@ export function useArcWorkerWallet() {
                 }
             } else if (preFetchedAddress) {
                 console.log("[ArcWorker SDK] Wallet already exists:", preFetchedAddress);
-                return { address: preFetchedAddress, userToken };
+                return { address: preFetchedAddress, userToken, userId: bridgedId || email };
             }
 
             // 4. Poll for Address
@@ -572,7 +572,7 @@ export function useArcWorkerWallet() {
 
             console.log("[ArcWorker SDK] PIN Flow Complete. Address:", finalAddress);
 
-            return { address: finalAddress || "PENDING_ADDRESS", userToken };
+            return { address: finalAddress || "PENDING_ADDRESS", userToken, userId: bridgedId || email };
 
         } catch (err: any) {
             const detail = err.response?.data?.details?.message || err.message || JSON.stringify(err);
@@ -653,7 +653,7 @@ export function useArcWorkerWallet() {
             localStorage.setItem('arc_session_token', userToken);
             localStorage.setItem('arc_encryption_key', encryptionKey);
 
-            return { address: finalAddress || "PENDING_ADDRESS", userToken };
+            return { address: finalAddress || "PENDING_ADDRESS", userToken, userId };
 
         } catch (err: any) {
             const detail = err.response?.data?.details?.message || err.message || JSON.stringify(err);

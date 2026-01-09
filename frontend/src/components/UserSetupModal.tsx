@@ -139,7 +139,14 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
         }
 
         try {
-            const result = await setupCircleOtpWallet(email);
+            let result;
+            if (role === 'agency' || role === 'developer' || !role) {
+                console.log("[UserSetup] Registering as Agency/Auth (Forcing PIN)...");
+                result = await setupArcWorkerWallet(email, role || 'agency');
+            } else {
+                console.log("[UserSetup] Registering as Worker (Email/OTP)...");
+                result = await setupCircleOtpWallet(email);
+            }
 
             if (result && result.address) {
                 setCapturedAddress(result.address);
@@ -151,8 +158,8 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
                 setAuthError("Email verified, but wallet is still initializing. Please wait and try again or contact support.");
             }
         } catch (err: any) {
-            console.error("Circle OTP Registration Failed:", err);
-            setAuthError(err.message || "Email verification failed. Try again.");
+            console.error("Circle Registration Failed:", err);
+            setAuthError(err.message || "Identity verification failed. Try again.");
         }
     };
 
@@ -297,16 +304,43 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
             });
             const { user } = response.data;
 
-            // If it's a Circle user, we ALSO need to establish a session (trigger OTP)
+            // If it's a Circle user, we ALSO need to establish a session (trigger OTP or PIN)
             if (user.walletType === 'circle' || user.email) {
-                console.log("Circle user detected, establishing session via OTP...");
+                console.log(`Circle user detected in ${user.role} portal, establishing session...`);
                 try {
                     const emailToVerify = user.email || username;
-                    const result = await setupCircleOtpWallet(emailToVerify);
+                    let result;
+
+                    if (user.role === 'agency' || user.role === 'developer') {
+                        console.log("[UserSetup] Agency login: Establishing PIN session...");
+                        result = await setupArcWorkerWallet(emailToVerify, user.role);
+                    } else {
+                        console.log("[UserSetup] Worker login: Establishing OTP session...");
+                        result = await setupCircleOtpWallet(emailToVerify);
+                    }
+
+                    // SYNC BACK TO DB IF ID WAS MISSING
+                    if (result.userId && !user.userId) {
+                        try {
+                            console.log("Syncing missing userId back to server...");
+                            await axios.post('/api/auth/sync-id', {
+                                username: user.username,
+                                userId: result.userId
+                            });
+                        } catch (syncErr) {
+                            console.warn("Retrospective ID sync failed:", syncErr);
+                        }
+                    }
+
                     // Update user object with Circle-specific data for persistence
                     user.address = result.address;
-                    user.userId = result.userId;
+                    user.userId = result.userId || user.userId; // Preserve old if new is null
                     user.walletType = 'circle';
+
+                    // Specific fix for Agencies: also store the user token for immediate dashboard use
+                    if (result.userToken) {
+                        localStorage.setItem('arc_session_token', result.userToken);
+                    }
                 } catch (err: any) {
                     console.error("Failed to re-establish Circle session:", err);
                     setAuthError(err.message || "Login success, but failed to connect wallet. Try again.");
@@ -435,7 +469,7 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
                         {currentStep === 'wallet' && (
                             <OnboardingLayout
                                 title=""
-                                subtitle="Create account to access the protocol."
+                                subtitle={role === 'agency' ? "Access the protocol using your Agency Identity." : "Create account to access the protocol."}
                                 footerContent={true}
                                 onClose={onClose}
                             >
@@ -449,8 +483,8 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
 
                                     <div>
                                         <MinimalInput
-                                            type="email"
-                                            placeholder="Enter your email address"
+                                            type={role === 'agency' ? "text" : "email"}
+                                            placeholder={role === 'agency' ? "Enter your Agency Email or ID" : "Enter your email address"}
                                             value={email}
                                             onChange={(e) => {
                                                 setEmail(e.target.value.toLowerCase());
@@ -658,10 +692,12 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
 
                             <div className="space-y-3">
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 px-1">Email or Username</label>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 px-1">
+                                        {role === 'agency' ? "Agency Identity" : "Email or Username"}
+                                    </label>
                                     <MinimalInput
                                         type="text"
-                                        placeholder="email@example.com or @username"
+                                        placeholder={role === 'agency' ? "@username or agency@email.com" : "email@example.com or @username"}
                                         value={username}
                                         onChange={(e) => {
                                             setUsername(e.target.value.replace(/\s+/g, '').toLowerCase());

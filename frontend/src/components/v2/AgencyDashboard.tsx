@@ -8,6 +8,7 @@ import { useTasks } from '@/hooks/useTasks';
 import { useAccount, useWriteContract } from 'wagmi';
 import { CONTRACTS } from '@/utils/contracts';
 import { getSdk } from '@/utils/circle';
+import { ensureCircleSession } from '@/utils/circleSession';
 
 export const AgencyDashboard: React.FC = () => {
     const router = useRouter();
@@ -17,65 +18,131 @@ export const AgencyDashboard: React.FC = () => {
     // Get Circle wallet address if logged in
     useEffect(() => {
         const fetchCircleAddress = async () => {
-            // First, check localStorage cache
-            const cachedAddress = localStorage.getItem('arc_wallet_address');
-            if (cachedAddress) {
-                setCircleAddress(cachedAddress);
-            }
-
-            // Then fetch fresh data from API
             const circleUser = localStorage.getItem('arc_user');
             const sessionToken = localStorage.getItem('arc_session_token');
 
             if (circleUser && sessionToken) {
                 try {
-                    const res = await fetch('/api/circle/wallet', {
+                    let currentToken = sessionToken;
+                    let res = await fetch('/api/circle/wallet', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userToken: sessionToken })
+                        body: JSON.stringify({ userToken: currentToken })
                     });
+
+                    // Handle Session Expired (401)
+                    if (res.status === 401) {
+                        const userId = JSON.parse(circleUser).id || circleUser;
+                        const session = await ensureCircleSession(userId);
+                        if (session) {
+                            currentToken = session.userToken;
+                            res = await fetch('/api/circle/wallet', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userToken: currentToken })
+                            });
+                        }
+                    }
 
                     const data = await res.json();
                     if (data.address) {
                         setCircleAddress(data.address);
-                        // Cache it for next time
                         localStorage.setItem('arc_wallet_address', data.address);
                     }
                 } catch (e) {
                     console.error('Error fetching Circle wallet address:', e);
                 }
+            } else {
+                setCircleAddress(undefined);
             }
         };
 
         fetchCircleAddress();
-    }, []);
+    }, [userAddress, isConnected]); // Re-fetch if wallet changes
 
-    // Use Circle address if available, otherwise use MetaMask address
-    const effectiveAddress = userAddress || circleAddress;
+    // Soporte para múltiples direcciones (MetaMask + Circle)
+    const combinedAddresses = useMemo(() => {
+        const addrs: string[] = [];
+        if (userAddress) addrs.push(userAddress);
+        if (circleAddress) addrs.push(circleAddress);
+        return addrs;
+    }, [userAddress, circleAddress]);
 
-    const { tasks: agencyTasks, isLoading } = useTasks(effectiveAddress);
+    const { tasks: agencyTasks, isLoading, refetch, allTasksCount, readError, actualContractCount } = useTasks(combinedAddresses);
     const [activeView, setActiveView] = useState<'overview' | 'review' | 'settings'>('overview');
     const [isWalletOpen, setIsWalletOpen] = useState(false);
 
-    // Group tasks by title to represent "Campaigns"
+    // Group tasks by NORMALIZED TITLE to merge batches
     const campaigns = useMemo(() => {
-        const groups: Record<string, { title: string, count: number, completed: number, reward: string, type: string, status: string }> = {};
+        const groups: Record<string, {
+            key: string,
+            title: string,
+            count: number,
+            completed: number,
+            cancelled: number,
+            needsReview: number,
+            totalSubmissions: number,
+            currentSubmissions: number,
+            reward: string,
+            type: string,
+            status: string,
+            metadata: any
+        }> = {};
 
         agencyTasks.forEach((t: any) => {
-            // Use metadataHash as fallback if title is empty
-            const key = t.title || t.metadataHash || `Campaign-${t.id}`;
+            // NORMALIZE: Merge "Demo ", "Demo", and "demo" into one key
+            const cleanTitle = (t.title && t.title !== 'Unknown') ? t.title.trim() : null;
+            // Use title key (lowercase for safety) or hash fallback
+            const key = cleanTitle ? cleanTitle.toLowerCase() : (`Campaign-${t.id}`);
+
             if (!groups[key]) {
                 groups[key] = {
-                    title: t.title || 'Untitled Campaign',
+                    key: key,
+                    title: cleanTitle || t.title || 'Untitled Campaign', // Use clean title as display
                     count: 0,
                     completed: 0,
+                    cancelled: 0,
+                    needsReview: 0,
+                    totalSubmissions: 0,
+                    currentSubmissions: 0,
                     reward: t.reward,
                     type: t.metadata?.moduleId || t.metadata?.mod || 'Task',
-                    status: 'Active'
+                    status: 'Active',
+                    metadata: t.metadata
                 };
             }
+
             groups[key].count++;
-            if (t.status === 2) groups[key].completed++;
+            groups[key].totalSubmissions += (t.requiredSubmissions || 1);
+            groups[key].currentSubmissions += (t.currentSubmissions || 0);
+
+            const s = Number(t.status || 0); // Usar el status que ya viene corregido de useTasks
+            if (s === 1) groups[key].needsReview++;
+            if (s === 2 || s === 3) groups[key].completed++;
+            if (s === 4) groups[key].cancelled++;
+        });
+
+        // Determine actual status based on precise counters
+        Object.values(groups).forEach((g) => {
+            const processed = g.completed + g.cancelled + g.needsReview;
+
+            if (g.count === 0) {
+                g.status = 'Created';
+            } else if (g.cancelled > g.count / 2) {
+                // Si más del 50% están canceladas, mostrar Cancelled
+                g.status = 'Cancelled';
+            } else if (g.cancelled > 0 && g.cancelled === g.count) {
+                // Si TODAS están canceladas
+                g.status = 'Cancelled';
+            } else if (g.completed === g.count) {
+                g.status = 'Completed';
+            } else if (g.needsReview > 0) {
+                g.status = 'Reviewing';
+            } else if (processed > 0 || g.currentSubmissions > 0) {
+                g.status = 'Active';
+            } else {
+                g.status = 'Active';
+            }
         });
 
         return Object.values(groups);
@@ -106,6 +173,7 @@ export const AgencyDashboard: React.FC = () => {
                     args: [BigInt(taskId)],
                 });
                 alert(`Task ${action === 'approve' ? 'Approved' : 'Rejected'} successfully via Wallet!`);
+                refetch();
                 setSelectedReview(null);
                 return;
             }
@@ -149,6 +217,7 @@ export const AgencyDashboard: React.FC = () => {
                 }
 
                 alert(`Task ${action === 'approve' ? 'Approved' : 'Rejected'} successfully via Circle!`);
+                refetch();
                 setSelectedReview(null);
             } else {
                 alert("Please connect a wallet or sign in to perform this action.");
@@ -195,51 +264,59 @@ export const AgencyDashboard: React.FC = () => {
 
             // Check if using wagmi connector (MetaMask, etc.) or Circle wallet
             if (isConnected && userAddress) {
-                // Use wagmi for connected wallets
-                for (const task of tasksToCancel) {
-                    await writeAgencyAction({
-                        address: CONTRACTS.TaskEscrow.address,
-                        abi: CONTRACTS.TaskEscrow.abi,
-                        functionName: 'cancelTask',
-                        args: [BigInt(task.id)],
-                    });
-                }
+                // Use wagmi for connected wallets - Batch call
+                const taskIds = tasksToCancel.map(t => BigInt(t.id));
+                await writeAgencyAction({
+                    address: CONTRACTS.TaskEscrow.address,
+                    abi: CONTRACTS.TaskEscrow.abi,
+                    functionName: 'cancelTasksBatch',
+                    args: [taskIds],
+                });
             } else if (circleAddress) {
-                // Use Circle API for Circle wallets
+                // Use Circle API for Circle wallets - Batch call
                 const circleUser = localStorage.getItem('arc_user');
                 const sessionToken = localStorage.getItem('arc_session_token');
                 if (!circleUser) throw new Error("Please log in to cancel tasks");
 
                 const user = JSON.parse(circleUser);
                 const userId = user.id || user.userId;
+                const taskIds = tasksToCancel.map(t => Number(t.id));
 
-                for (const task of tasksToCancel) {
-                    const res = await fetch('/api/circle/cancel-task', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId, taskId: task.id, userToken: sessionToken || undefined })
-                    });
-                    const data = await res.json();
-                    if (data.error) throw new Error(data.message || data.error);
+                console.log(`[Dashboard] Requesting BATCH cancellation for ${taskIds.length} tasks...`);
 
-                    if (data.challengeId) {
-                        const sdk = getSdk();
-                        if (!sdk) throw new Error("Circle SDK not initialized");
-                        sdk.setAppSettings({ appId: data.appId });
-                        sdk.setAuthentication({ userToken: data.userToken, encryptionKey: data.encryptionKey });
-                        await new Promise((resolve, reject) => {
-                            sdk.execute(data.challengeId, (error: any, result: any) => {
-                                if (error) reject(error);
-                                else resolve(result);
-                            });
+                const res = await fetch('/api/circle/cancel-task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId,
+                        taskId: taskIds, // Send as array for batching
+                        userToken: sessionToken || undefined
+                    })
+                });
+
+                const data = await res.json();
+                if (data.error) throw new Error(data.message || data.error);
+
+                if (data.challengeId) {
+                    const sdk = getSdk();
+                    if (!sdk) throw new Error("Circle SDK not initialized");
+                    sdk.setAppSettings({ appId: data.appId });
+                    sdk.setAuthentication({ userToken: data.userToken, encryptionKey: data.encryptionKey });
+
+                    console.log("[Dashboard] Executing Circle Batch Challenge...");
+                    await new Promise((resolve, reject) => {
+                        sdk.execute(data.challengeId, (error: any, result: any) => {
+                            if (error) reject(error);
+                            else resolve(result);
                         });
-                    }
+                    });
                 }
             } else {
                 throw new Error("No wallet connected. Please connect a wallet or log in with Circle.");
             }
 
             alert(`Successfully cancelled ${tasksToCancel.length} tasks!`);
+            refetch();
         } catch (err: any) {
             console.error(err);
             alert(`Cancellation Failed: ${err.message || err.shortMessage || 'Unknown error'}`);
@@ -382,7 +459,14 @@ export const AgencyDashboard: React.FC = () => {
                                                         <div className="h-full bg-blue-500" style={{ width: `${(camp.completed / camp.count) * 100}%` }}></div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4"><span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">{camp.status}</span></td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${camp.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
+                                                        camp.status === 'Completed' ? 'bg-blue-100 text-blue-700' :
+                                                            'bg-green-100 text-green-700'
+                                                        }`}>
+                                                        {camp.status}
+                                                    </span>
+                                                </td>
                                                 <td className="px-6 py-4 text-right flex justify-end gap-2">
                                                     <button
                                                         onClick={() => handleCancelCampaign(camp.title === 'Untitled Campaign' ? '' : camp.title)}
@@ -425,7 +509,9 @@ export const AgencyDashboard: React.FC = () => {
                                         >
                                             <div className="flex justify-between items-start mb-1">
                                                 <span className="font-bold text-sm text-gray-900">Task #{task.id}</span>
-                                                <span className="text-[10px] text-gray-400">Active</span>
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${task.status === 1 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                                                    {task.status === 1 ? 'Submitted' : 'Active'}
+                                                </span>
                                             </div>
                                             <p className="text-xs text-gray-500 truncate">{task.title}</p>
                                             <div className="mt-2 flex items-center gap-2">

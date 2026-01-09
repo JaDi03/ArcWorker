@@ -62,7 +62,7 @@ export async function POST(request: Request) {
             }) as any;
 
             const agencyOnChain = task[1];
-            const statusOnChain = Number(task[6]);
+            const statusOnChain = Number(task[5]); // Status is at index 5 in the Task struct
 
             if (agencyOnChain.toLowerCase() !== circleAddress.toLowerCase()) {
                 console.error(`[Circle API] REJECT PERMISSION DENIED: Wallet ${circleAddress} is not the agency ${agencyOnChain}`);

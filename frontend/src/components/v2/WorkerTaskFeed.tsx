@@ -7,6 +7,7 @@ import {
     Target,
     Type,
     Mic,
+    Users,
     ArrowLeft,
     Search,
     Filter,
@@ -44,7 +45,7 @@ interface TaskOpportunity {
     rewardPerTask: number;
     timePerTaskSec: number;
     difficulty: 'Easy' | 'Medium' | 'Hard';
-    verification: 'Consensus' | 'Manual' | 'Golden Set';
+    verification: 'Consensus' | 'Manual' | 'Golden Set' | 'Instant Auto-Pay' | 'Manual Review';
     availableTasks: number;
     tags: string[]; // Extra tags
 }
@@ -53,55 +54,55 @@ interface TaskOpportunity {
 const MOCK_TASKS: TaskOpportunity[] = [
     {
         id: 'task-101',
-        moduleId: 'vision-bbox',
+        moduleId: 'vision-class',
         title: 'Retail Audit: Cereal Brand Detection',
         clientName: 'ShelfVision AI',
-        description: 'Draw bounding boxes around cereal boxes on supermarket shelves. Identify brands like Corn Flakes, Cheerios, etc.',
+        description: 'Identify brands like Corn Flakes, Cheerios, etc., from supermarket photos.',
         rewardPerTask: 0.15,
         timePerTaskSec: 45,
         difficulty: 'Medium',
-        verification: 'Manual',
+        verification: 'Manual Review',
         availableTasks: 1250,
-        tags: ['Retail']
+        tags: ['Retail', 'Vision']
     },
     {
         id: 'task-102',
-        moduleId: 'vision-bbox',
-        title: 'Fashion: Street Style Accessories',
-        clientName: 'TrendSpotter Inc.',
-        description: 'Label fashion accessories in street photos: Handbags, Sunglasses, Scarves, Hats.',
+        moduleId: 'nlp-sentiment',
+        title: 'Customer Review Sentiment',
+        clientName: 'Shopify Partner',
+        description: 'Analyze sentiment of reviews for a sustainable fashion brand.',
         rewardPerTask: 0.12,
         timePerTaskSec: 30,
         difficulty: 'Easy',
         verification: 'Consensus',
         availableTasks: 5000,
-        tags: ['Fashion']
+        tags: ['NLP', 'Fashion']
     },
     {
         id: 'task-103',
-        moduleId: 'vision-class', // Was hardcoded as Classification before
+        moduleId: 'vision-class',
         title: 'Traffic Signal Classification',
         clientName: 'SafeDriver AI',
-        description: 'Classify traffic lights in urban intersection images: Red, Green, Yellow, or Off.',
+        description: 'Classify traffic lights: Red, Green, Yellow, or Off in urban photos.',
         rewardPerTask: 0.05,
         timePerTaskSec: 10,
-        difficulty: 'Hard',
-        verification: 'Golden Set',
+        difficulty: 'Easy',
+        verification: 'Instant Auto-Pay',
         availableTasks: 800,
         tags: ['Autonomous Driving']
     },
     {
         id: 'task-104',
-        moduleId: 'nlp-sentiment',
-        title: 'Spanish-English Sentiment Analysis',
-        clientName: 'GlobalVoice',
-        description: 'Read customer reviews and determine if the sentiment is Positive, Negative, or Neutral.',
-        rewardPerTask: 0.08,
-        timePerTaskSec: 20,
-        difficulty: 'Easy',
-        verification: 'Consensus',
+        moduleId: 'nlp-trans',
+        title: 'Spanish-English Translation Review',
+        clientName: 'ArcTranslate',
+        description: 'Verify translation accuracy for technical documentation snippets.',
+        rewardPerTask: 0.50,
+        timePerTaskSec: 60,
+        difficulty: 'Hard',
+        verification: 'Manual Review',
         availableTasks: 3200,
-        tags: ['Bilingual']
+        tags: ['Language', 'Hard']
     }
 ];
 
@@ -115,33 +116,74 @@ export const WorkerTaskFeed: React.FC = () => {
             return [];
         }
 
-        // Filter for tasks that are available (Status 0) and not expired
         const now = Math.floor(Date.now() / 1000);
+        const currentUserLower = userAddress?.toLowerCase();
 
-        const filtered = rawTasks
-            .filter((t: any) => t.status === 0 && Number(t.deadline) > now)
-            .map((t: any) => {
-                const metadata = t.metadata || {};
-                return {
-                    id: t.id.toString(),
-                    moduleId: metadata.moduleId || 'vision-class',
-                    title: t.title,
-                    clientName: t.agency?.substring(0, 8) + '...',
-                    description: t.description,
-                    rewardPerTask: parseFloat(t.reward),
-                    timePerTaskSec: metadata.timePerTaskSec || 45,
-                    difficulty: metadata.difficulty || 'Medium',
-                    verification: metadata.verification || metadata.verificationStrategy || 'Consensus',
-                    availableTasks: 1, // Contract treats each ID as 1 task for now in the counter-based hook
-                    tags: metadata.tags || []
-                };
+        // 1. Identify campaigns (metadataHash) where the current worker has already participated
+        const participatedCampaigns = new Set<string>();
+        if (currentUserLower) {
+            rawTasks.forEach((t: any) => {
+                if (t.worker?.toLowerCase() === currentUserLower && t.metadataHash) {
+                    participatedCampaigns.add(t.metadataHash);
+                }
             });
+        }
 
-        return filtered;
-    }, [rawTasks]);
+        // 2. Group available tasks (Created status, currentSubmissions < requiredSubmissions, not expired) by metadataHash
+        const groups: Record<string, any[]> = {};
+        rawTasks.forEach((t: any) => {
+            const isAvailable = (t.status === 0 || t.status === 1) &&
+                Number(t.currentSubmissions) < Number(t.requiredSubmissions) &&
+                Number(t.deadline) > now &&
+                t.metadataHash;
 
-    // If no tasks from contract, show mock tasks in dev mode (for preview)
-    const tasksToShow = availableTasks.length > 0 ? availableTasks : MOCK_TASKS;
+            if (isAvailable) {
+                if (!groups[t.metadataHash]) groups[t.metadataHash] = [];
+                groups[t.metadataHash].push(t);
+            }
+        });
+
+        // 3. Transform groups into TaskOpportunities, skipping participated ones
+        const opportunities: TaskOpportunity[] = [];
+
+        Object.entries(groups).forEach(([hash, tasksInGroup]) => {
+            if (participatedCampaigns.has(hash)) {
+                // User already did one task from this campaign, skip entire group
+                return;
+            }
+
+            const representative = tasksInGroup[0];
+            const metadata = representative.metadata || {};
+
+            let verificationLabel = metadata.verification || metadata.verificationStrategy || 'Manual Review';
+            if (representative.correctAnswerHash && representative.correctAnswerHash !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+                verificationLabel = 'Instant Auto-Pay';
+            } else if (representative.requiredSubmissions > 1) {
+                verificationLabel = 'Consensus';
+            } else {
+                verificationLabel = 'Manual Review';
+            }
+
+            opportunities.push({
+                id: representative.id.toString(),
+                moduleId: metadata.moduleId || 'vision-class',
+                title: representative.title,
+                clientName: representative.agency?.substring(0, 8) + '...',
+                description: representative.description,
+                rewardPerTask: parseFloat(representative.reward),
+                timePerTaskSec: metadata.timePerTaskSec || 45,
+                difficulty: metadata.difficulty || 'Medium',
+                verification: verificationLabel,
+                availableTasks: tasksInGroup.length,
+                tags: metadata.tags || []
+            });
+        });
+
+        return opportunities;
+    }, [rawTasks, userAddress]);
+
+    // Only show mock tasks if there are NO real tasks from the contract at all
+    const tasksToShow = (rawTasks && rawTasks.length > 0) ? availableTasks : MOCK_TASKS;
 
     // Mock Config Generator (This would come from the smart contract metadata in production)
     const getTaskConfig = (moduleId: string): TaskConfig => {
@@ -248,6 +290,7 @@ export const WorkerTaskFeed: React.FC = () => {
             title: selectedTask.title,
             subtitle: selectedTask.clientName || 'Agency',
             reward: `$${selectedTask.rewardPerTask || selectedTask.reward} USDC`,
+            verificationType: selectedTask.verification,
             imageUrl: metadata.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
             textContent: metadata.textContent || "Loading task content..."
         };
@@ -275,10 +318,10 @@ export const WorkerTaskFeed: React.FC = () => {
     // Helper to get verification badge style
     const getVerificationStyle = (ver: string) => {
         switch (ver) {
-            case 'Consensus': return 'text-blue-600 bg-blue-50 border-blue-100';
-            case 'Manual': return 'text-purple-600 bg-purple-50 border-purple-100';
-            case 'Golden Set': return 'text-amber-600 bg-amber-50 border-amber-100';
-            default: return 'text-gray-600';
+            case 'Consensus': return 'text-blue-600 bg-blue-50 border-blue-100 italic';
+            case 'Manual Review': return 'text-purple-600 bg-purple-50 border-purple-100';
+            case 'Instant Auto-Pay': return 'text-emerald-600 bg-emerald-50 border-emerald-100 font-bold';
+            default: return 'text-gray-600 bg-gray-50 border-gray-100';
         }
     };
 
@@ -345,8 +388,10 @@ export const WorkerTaskFeed: React.FC = () => {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{task.clientName}</span>
-                                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${getVerificationStyle(task.verification)} flex items-center gap-1`}>
-                                                <ShieldCheck className="w-3 h-3" />
+                                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${getVerificationStyle(task.verification)} flex items-center gap-1 shadow-sm`}>
+                                                {task.verification === 'Instant Auto-Pay' ? <Zap className="w-2.5 h-2.5 fill-current" /> :
+                                                    task.verification === 'Consensus' ? <Users className="w-2.5 h-2.5" /> :
+                                                        <Clock className="w-2.5 h-2.5" />}
                                                 {task.verification}
                                             </span>
                                         </div>

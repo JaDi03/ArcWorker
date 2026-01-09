@@ -78,4 +78,6 @@ export interface CampaignConfig {
     // Payment
     rewardPerTask: number;
     totalTasks: number;
+    workersPerTask?: number;
+    correctAnswer?: string;
 }

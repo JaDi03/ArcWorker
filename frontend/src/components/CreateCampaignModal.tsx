@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
 import { parseEther } from 'viem';
 import { CONTRACTS } from '../utils/contracts';
+import { ensureCircleSession, getCircleUserId } from '../utils/circleSession';
 import { W3SSdk } from '@circle-fin/w3s-pw-web-sdk';
 import {
     X,
@@ -208,6 +209,7 @@ export function CreateCampaignModal({ isOpen, onClose, onSubmit }: CreateCampaig
             difficulty: formData.difficulty
         });
 
+        // Si está conectado con wallet, usar wagmi directamente
         if (isConnected) {
             writeContract({
                 address: CONTRACTS.TaskEscrow.address,
@@ -219,28 +221,22 @@ export function CreateCampaignModal({ isOpen, onClose, onSubmit }: CreateCampaig
             return;
         }
 
-        const circleUser = localStorage.getItem('arc_user');
-        const sessionToken = localStorage.getItem('arc_session_token');
-
-        if (circleUser) {
-            try {
-                const user = JSON.parse(circleUser);
-                const userId = user.id || user.userId;
-                const encryptionKey = localStorage.getItem('arc_encryption_key');
-
-                if (sessionToken && encryptionKey) {
-                    await handleViaCircle(userId, sessionToken, totalValue, totalSeconds, metadata);
-                    return;
-                }
-                if (userId && !userId.includes('@')) {
-                    await handleViaCircle(userId, undefined, totalValue, totalSeconds, metadata);
-                    return;
-                }
-                alert("Security session expired. Please log out and back in once.");
-            } catch (e) {
-                console.error(e);
-            }
+        // Si usa Circle, asegurar sesión válida y proceder
+        const userId = getCircleUserId();
+        if (!userId) {
+            alert("No se pudo obtener el ID de usuario. Por favor, inicia sesión de nuevo.");
+            return;
         }
+
+        // Usar helper para asegurar sesión válida
+        const session = await ensureCircleSession(userId);
+        if (!session) {
+            alert("No se pudo renovar la sesión. Por favor, cierra sesión e inicia de nuevo.");
+            return;
+        }
+
+        // Proceder con Circle usando sesión renovada
+        await handleViaCircle(userId, session.userToken, totalValue, totalSeconds, metadata);
     };
 
     const categories = [
@@ -302,8 +298,8 @@ export function CreateCampaignModal({ isOpen, onClose, onSubmit }: CreateCampaig
                                                 key={cat.id}
                                                 onClick={() => setFormData(prev => ({ ...prev, template: cat.id as any }))}
                                                 className={`p-6 rounded-3xl border-2 text-left transition-all group ${formData.template === cat.id
-                                                        ? 'border-[#005ddb] bg-blue-50/30'
-                                                        : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                                                    ? 'border-[#005ddb] bg-blue-50/30'
+                                                    : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
                                                     }`}
                                             >
                                                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-5 transition-colors ${formData.template === cat.id ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'

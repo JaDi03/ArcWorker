@@ -62,7 +62,7 @@ export async function POST(request: Request) {
             }) as any;
 
             const agencyOnChain = task[1];
-            const statusOnChain = Number(task[6]);
+            const statusOnChain = Number(task[5]); // Status is at index 5 in the Task struct
 
             console.log(`[Circle API] Task #${taskId} state: Agency=${agencyOnChain}, Status=${statusOnChain}`);
 
@@ -101,15 +101,21 @@ export async function POST(request: Request) {
             encryptionKey = session.encryptionKey;
         }
 
-        // Initiate contract call: cancelTask(taskId)
-        // Note: cancelTask doesn't require value transfer, so no amount parameter
+        // Initiate contract call: cancelTasksBatch(uint256[]) or cancelTask(uint256)
+        // If taskId is an array or we want to force batching:
+        const isBatch = Array.isArray(taskId);
+        const method = isBatch ? 'cancelTasksBatch(uint256[])' : 'cancelTask(uint256)';
+        const args = isBatch ? [taskId.map(id => id.toString())] : [taskId.toString()];
+
+        console.log(`[Circle API] Calling ${method} with args:`, JSON.stringify(args));
+
         const challengeId = await createCircleContractCall(
             userToken,
             wallet.id,
             CONTRACTS.TaskEscrow.address,
-            'cancelTask(uint256)',
-            [taskId.toString()],
-            undefined  // No amount needed for cancelTask
+            method,
+            args,
+            undefined
         );
 
         return NextResponse.json({

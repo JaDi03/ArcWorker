@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
     ImagePlus, FileText, Headphones, Table,
-    Globe
+    Globe, UploadCloud, CheckCircle
 } from 'lucide-react';
 import { ComponentType, CampaignConfig } from './types';
 
@@ -22,22 +22,67 @@ const Wrapper = ({ title, children, index }: { title: string, children: React.Re
 export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components, config, onChange }) => {
 
 
-    const renderUploadImage = (index: number) => (
-        <Wrapper title="Dataset (Images)" index={index}>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-10 text-center hover:border-blue-500 hover:bg-blue-50 transition cursor-pointer group">
-                <ImagePlus className="w-10 h-10 text-gray-400 mx-auto group-hover:text-blue-500 mb-2" />
-                <p className="text-sm font-medium text-gray-700">Upload Images (ZIP) or Connect Bucket</p>
-                <p className="text-xs text-gray-500 mt-1">Supports JPG, PNG, WEBP</p>
-                <input
-                    type="text"
-                    className="mt-2 w-full text-center text-xs border-none focus:ring-0 text-gray-400"
-                    placeholder="Paste URL here..."
-                    value={config.datasetUrl || ''}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ datasetUrl: e.target.value })}
-                />
-            </div>
-        </Wrapper>
-    );
+    const renderUploadImage = (index: number) => {
+        const fileInputRef = useRef<HTMLInputElement>(null);
+        const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
+        const [fileName, setFileName] = useState<string | null>(null);
+
+        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                setFileName(file.name);
+                setUploadStatus('uploading');
+                // Simulate upload
+                setTimeout(() => {
+                    setUploadStatus('success');
+                    onChange({ datasetUrl: `file://${file.name}` });
+                }, 1500);
+            }
+        };
+
+        return (
+            <Wrapper title="Dataset (Images)" index={index}>
+                <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-10 text-center transition cursor-pointer group ${uploadStatus === 'success' ? 'border-green-500 bg-green-50/30' : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
+                        }`}
+                >
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept=".zip,image/*"
+                        onChange={handleFileChange}
+                    />
+
+                    {uploadStatus === 'success' ? (
+                        <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3 animate-in zoom-in" />
+                    ) : uploadStatus === 'uploading' ? (
+                        <UploadCloud className="w-12 h-12 text-blue-500 mx-auto mb-3 animate-bounce" />
+                    ) : (
+                        <ImagePlus className="w-12 h-12 text-gray-400 mx-auto group-hover:text-blue-500 mb-3" />
+                    )}
+
+                    <p className={`text-sm font-bold ${uploadStatus === 'success' ? 'text-green-700' : 'text-gray-700'}`}>
+                        {uploadStatus === 'success' ? `Ready: ${fileName}` : uploadStatus === 'uploading' ? 'Analyzing file...' : 'Upload Images (ZIP) or Folder'}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">Supports JPG, PNG, WEBP, ZIP</p>
+
+                    <div className="mt-6 pt-6 border-t border-gray-100 flex items-center gap-3">
+                        <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">or</span>
+                        <input
+                            type="text"
+                            className="flex-1 bg-gray-50 border-none rounded-lg px-3 py-2 text-xs font-semibold text-gray-600 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                            placeholder="Connect AWS S3 Bucket URL"
+                            value={config.datasetUrl || ''}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ datasetUrl: e.target.value })}
+                        />
+                    </div>
+                </div>
+            </Wrapper>
+        );
+    };
 
     const renderCampaignInfo = (index: number) => (
         <Wrapper title="Campaign Information" index={index}>
@@ -73,32 +118,119 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
     );
 
 
-    const renderUploadText = (index: number) => (
-        <Wrapper title="Text Dataset" index={index}>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition cursor-pointer">
-                <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">Upload JSONL, CSV or TXT files</p>
-            </div>
-        </Wrapper>
-    );
+    const renderUploadText = (index: number) => {
+        const fileInputRef = useRef<HTMLInputElement>(null);
+        const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
+        const [fileName, setFileName] = useState<string | null>(null);
 
-    const renderUploadAudio = (index: number) => (
-        <Wrapper title="Audio Source" index={index}>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-purple-500 transition cursor-pointer">
-                <Headphones className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">Upload MP3/WAV files</p>
-            </div>
-        </Wrapper>
-    );
+        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                setFileName(file.name);
+                setUploadStatus('uploading');
+                setTimeout(() => {
+                    setUploadStatus('success');
+                    onChange({ textDatasetUrl: `file://${file.name}` });
+                }, 1200);
+            }
+        };
 
-    const renderUploadCsv = (index: number) => (
-        <Wrapper title="Source Data" index={index}>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-orange-500 transition cursor-pointer">
-                <Table className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">Upload CSV with 'source' column</p>
-            </div>
-        </Wrapper>
-    );
+        return (
+            <Wrapper title="Text Dataset" index={index}>
+                <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-8 text-center transition cursor-pointer group ${uploadStatus === 'success' ? 'border-blue-500 bg-blue-50/30' : 'border-gray-300 hover:border-blue-500'
+                        }`}
+                >
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".jsonl,.csv,.txt" onChange={handleFileChange} />
+                    {uploadStatus === 'success' ? (
+                        <CheckCircle className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                    ) : (
+                        <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2 group-hover:text-blue-500" />
+                    )}
+                    <p className="text-sm font-bold text-gray-700">
+                        {uploadStatus === 'success' ? fileName : 'Upload JSONL, CSV or TXT files'}
+                    </p>
+                </div>
+            </Wrapper>
+        );
+    };
+
+    const renderUploadAudio = (index: number) => {
+        const fileInputRef = useRef<HTMLInputElement>(null);
+        const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
+        const [fileName, setFileName] = useState<string | null>(null);
+
+        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                setFileName(file.name);
+                setUploadStatus('uploading');
+                setTimeout(() => {
+                    setUploadStatus('success');
+                    onChange({ audioDatasetUrl: `file://${file.name}` });
+                }, 1500);
+            }
+        };
+
+        return (
+            <Wrapper title="Audio Source" index={index}>
+                <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-8 text-center transition cursor-pointer group ${uploadStatus === 'success' ? 'border-purple-500 bg-purple-50/30' : 'border-gray-300 hover:border-purple-500'
+                        }`}
+                >
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".mp3,.wav,.ogg" onChange={handleFileChange} />
+                    {uploadStatus === 'success' ? (
+                        <CheckCircle className="w-8 h-8 text-purple-500 mx-auto mb-2" />
+                    ) : (
+                        <Headphones className="w-8 h-8 text-gray-400 mx-auto mb-2 group-hover:text-purple-500" />
+                    )}
+                    <p className="text-sm font-bold text-gray-700">
+                        {uploadStatus === 'success' ? fileName : 'Upload MP3/WAV files'}
+                    </p>
+                </div>
+            </Wrapper>
+        );
+    };
+
+    const renderUploadCsv = (index: number) => {
+        const fileInputRef = useRef<HTMLInputElement>(null);
+        const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
+        const [fileName, setFileName] = useState<string | null>(null);
+
+        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                setFileName(file.name);
+                setUploadStatus('uploading');
+                setTimeout(() => {
+                    setUploadStatus('success');
+                    onChange({ sourceDataUrl: `file://${file.name}` });
+                }, 1000);
+            }
+        };
+
+        return (
+            <Wrapper title="Source Data" index={index}>
+                <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-8 text-center transition cursor-pointer group ${uploadStatus === 'success' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-300 hover:border-orange-500'
+                        }`}
+                >
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleFileChange} />
+                    {uploadStatus === 'success' ? (
+                        <CheckCircle className="w-8 h-8 text-orange-500 mx-auto mb-2" />
+                    ) : (
+                        <Table className="w-8 h-8 text-gray-400 mx-auto mb-2 group-hover:text-orange-500" />
+                    )}
+                    <p className="text-sm font-bold text-gray-700">
+                        {uploadStatus === 'success' ? fileName : "Upload CSV with 'source' column"}
+                    </p>
+                </div>
+            </Wrapper>
+        );
+    };
 
     const renderLabelsCreator = (index: number) => (
         <Wrapper title="Taxonomy (Classes)" index={index}>
@@ -457,20 +589,32 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Total Tasks</label>
                     <input
                         type="number"
-                        step="100"
                         className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 font-mono font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
                         value={config.totalTasks || 10}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ totalTasks: parseInt(e.target.value) })}
                     />
                 </div>
 
-                <div className="w-px bg-gray-200 mx-2"></div>
+                <div className="flex-1">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Workers / Task</label>
+                    <input
+                        type="number"
+                        min="1"
+                        className={`w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 font-mono font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none ${config.verificationStrategy === 'Manual Review' ? 'bg-gray-50 opacity-50' : ''}`}
+                        value={config.workersPerTask || 1}
+                        disabled={config.verificationStrategy === 'Manual Review'}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ workersPerTask: parseInt(e.target.value) })}
+                    />
+                </div>
 
-                <div className="flex-1 bg-gray-50 rounded-lg p-3 border border-gray-200 flex flex-col justify-center">
-                    <span className="text-xs text-gray-500 mb-1">Total Deposit (Reward + 5% Fee)</span>
-                    <span className="text-2xl font-bold text-gray-900">
-                        ${((config.rewardPerTask || 0.15) * (config.totalTasks || 10) * 1.05).toFixed(2)}
+                <div className="w-px bg-gray-200 mx-1"></div>
+
+                <div className="w-48 bg-gray-900 rounded-lg p-3 text-white flex flex-col justify-center shadow-lg border border-gray-700">
+                    <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">Total Budget</span>
+                    <span className="text-xl font-bold font-mono">
+                        ${((config.rewardPerTask || 0.15) * (config.totalTasks || 10) * (config.workersPerTask || 1) * 1.05).toFixed(2)}
                     </span>
+                    <span className="text-[9px] text-gray-500 mt-1">Incl. 5% platform fee</span>
                 </div>
             </div>
         </Wrapper>
@@ -478,18 +622,18 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
 
     const renderVerificationConfig = (index: number) => (
         <Wrapper title="Verification Strategy" index={index}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <label className={`flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500 transition ${config.verificationStrategy === 'Consensus' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
                     <input
                         type="radio"
                         name="verification"
                         checked={config.verificationStrategy === 'Consensus'}
-                        onChange={() => onChange({ verificationStrategy: 'Consensus' })}
+                        onChange={() => onChange({ verificationStrategy: 'Consensus', workersPerTask: 3 })}
                         className="mt-1 text-blue-600 focus:ring-blue-500"
                     />
                     <div>
                         <span className="block text-sm font-semibold text-gray-900">Consensus (Auto)</span>
-                        <span className="block text-xs text-gray-500 mt-1">Send same task to 3 workers. Auto-approve if they agree.</span>
+                        <span className="block text-xs text-gray-500 mt-1">Multiple workers confirm the same task for quality.</span>
                     </div>
                 </label>
 
@@ -498,12 +642,12 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
                         type="radio"
                         name="verification"
                         checked={config.verificationStrategy === 'Manual Review'}
-                        onChange={() => onChange({ verificationStrategy: 'Manual Review' })}
+                        onChange={() => onChange({ verificationStrategy: 'Manual Review', workersPerTask: 1 })}
                         className="mt-1 text-blue-600 focus:ring-blue-500"
                     />
                     <div>
                         <span className="block text-sm font-semibold text-gray-900">Manual Review</span>
-                        <span className="block text-xs text-gray-500 mt-1">You or your team verify each submission manually.</span>
+                        <span className="block text-xs text-gray-500 mt-1">You verify each submission manually from the dashboard.</span>
                     </div>
                 </label>
 
@@ -512,15 +656,31 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
                         type="radio"
                         name="verification"
                         checked={config.verificationStrategy === 'Golden Set'}
-                        onChange={() => onChange({ verificationStrategy: 'Golden Set' })}
+                        onChange={() => onChange({ verificationStrategy: 'Golden Set', workersPerTask: 1 })}
                         className="mt-1 text-blue-600 focus:ring-blue-500"
                     />
                     <div>
                         <span className="block text-sm font-semibold text-gray-900">Golden Set (Auto)</span>
-                        <span className="block text-xs text-gray-500 mt-1">Mix in test questions with known answers to grade quality.</span>
+                        <span className="block text-xs text-gray-500 mt-1">Instant approval if worker matches ground truth answer.</span>
                     </div>
                 </label>
             </div>
+
+            {config.verificationStrategy === 'Golden Set' && (
+                <div className="p-4 bg-amber-50 border border-amber-100 rounded-lg animate-fade-in">
+                    <label className="block text-xs font-bold text-amber-700 uppercase tracking-wider mb-2">Ground Truth Answer</label>
+                    <input
+                        type="text"
+                        placeholder="Enter the correct answer for auto-verification..."
+                        className="w-full bg-white border border-amber-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                        value={config.correctAnswer || ''}
+                        onChange={(e) => onChange({ correctAnswer: e.target.value })}
+                    />
+                    <p className="text-[10px] text-amber-600 mt-2 font-medium italic">
+                        * Workers who submit this exact text will be approved and paid immediately by the protocol.
+                    </p>
+                </div>
+            )}
         </Wrapper>
     );
 

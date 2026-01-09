@@ -119,8 +119,32 @@ export async function updateUserPassword(username: string, newPassword: string) 
             throw new Error(`User ${username} not found`);
         }
 
-        users[userIndex].password = newPassword; // In production this must be hashed
+        users[userIndex].password = newPassword;
+        fs.writeFileSync(DB_PATH, JSON.stringify(users, null, 2));
+        return { success: true };
+    }
+}
 
+export async function updateUserUserId(username: string, userId: string) {
+    if (isProductionDB) {
+        try {
+            await sql`
+                UPDATE users SET user_id = ${userId} WHERE username = ${username}
+            `;
+            return { success: true };
+        } catch (error: any) {
+            console.error('[DB] Error updating userId in Postgres:', error.message);
+            throw error;
+        }
+    } else {
+        const users = await getUsers();
+        const userIndex = users.findIndex((u: any) => u.username === username);
+
+        if (userIndex === -1) {
+            throw new Error(`User ${username} not found`);
+        }
+
+        users[userIndex].userId = userId;
         fs.writeFileSync(DB_PATH, JSON.stringify(users, null, 2));
         return { success: true };
     }

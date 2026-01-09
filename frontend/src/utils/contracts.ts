@@ -4,7 +4,7 @@ import MockYieldVaultArtifact from '../abis/MockYieldVault.json';
 
 export const CONTRACTS = {
     TaskEscrow: {
-        address: "0xFd3CF1C00e6F99Eb77FC908c5B56dd899D2bCac6" as `0x${string}`, // Arc Testnet (FIXED VAULT)
+        address: "0x43AE98Ff8A2af37855C0209F4470e849B75cBE0F" as `0x${string}`, // Arc Testnet (BATCH SUPPORT)
         abi: TaskEscrowArtifact.abi,
     },
     ReputationRegistry: {
@@ -20,7 +20,7 @@ export const CONTRACTS = {
         ]
     },
     MockYieldVault: {
-        address: "0x567d55D61196B9FF0C07E2914E62F87bdd86Df47" as `0x${string}`, // Arc Testnet (WITH RECEIVE)
+        address: "0xe0e2f4eA038B9dfb92B2761B752FBbE0cF292e" as `0x${string}`, // Arc Testnet (LATEST VAULT)
         abi: MockYieldVaultArtifact.abi,
     }
 } as const;

@@ -40,6 +40,12 @@ frontend/public/uploads/
 debug_*.js
 setup_env.js
 BACKLOG.md
+check_contract.js
+*check_contract.js
+*.backup.tsx
+
+# Error manuals (Local recovery points)
+*error_manual.md
 
 # Debug Logs
 npm-debug.log*

@@ -15,22 +15,17 @@ const circleClient = axios.create({
 // Ensure key and environment are determined on every request
 circleClient.interceptors.request.use((config) => {
     const rawKey = process.env.CIRCLE_API_KEY;
-    if (rawKey) {
-        // 1. Clean Key
-        const cleanKey = rawKey.replace(/['"]+/g, '').trim();
-
-        // 2. Detection (For logging only, URL is unified)
-        const isSandbox = cleanKey.includes('TEST');
-
-        config.headers['Authorization'] = `Bearer ${cleanKey}`;
-
-        console.log(`[ArcWorker SDK] Request: ${config.method?.toUpperCase()} ${config.url}`);
-        console.log(`[ArcWorker SDK] Mode: ${isSandbox ? 'SANDBOX' : 'PRODUCTION'}`);
-        console.log(`[ArcWorker SDK] Base: ${config.baseURL}`);
-        console.log(`[ArcWorker SDK] Auth Prefix: ${cleanKey.substring(0, 15)}...`);
-    } else {
+    if (!rawKey) {
         console.error('[ArcWorker SDK] CRITICAL: CIRCLE_API_KEY is missing!');
+        throw new Error('Circle API Key is not configured in .env');
     }
+
+    const cleanKey = rawKey.replace(/['"]+/g, '').trim();
+    const isSandbox = cleanKey.includes('TEST');
+
+    config.headers['Authorization'] = `Bearer ${cleanKey}`;
+
+    console.log(`[ArcWorker SDK] Request: ${config.method?.toUpperCase()} ${config.url} | Mode: ${isSandbox ? 'SANDBOX' : 'PRODUCTION'}`);
     return config;
 });
 
@@ -133,7 +128,14 @@ export async function getUserIdFromToken(userToken: string) {
         const response = await circleClient.get('/user', {
             headers: { 'X-User-Token': userToken }
         });
-        return response.data.data?.userId || null;
+        const userId = response.data.data?.userId || response.data.data?.id;
+        console.log(` [Circle Token Info] Resolved User ID: ${userId}`);
+
+        if (!userId) {
+            console.warn(` [Circle Token Info] Full User Response:`, JSON.stringify(response.data.data, null, 2));
+        }
+
+        return userId || null;
     } catch (e: any) {
         console.warn(` [Circle Token Info] Failed to get identity from token:`, e.response?.data || e.message);
         return null;
@@ -269,15 +271,7 @@ export async function getCircleBalances(userToken: string, walletId: string) {
         });
         const balances = response.data.data.tokenBalances;
 
-        if (!balances || balances.length === 0) {
-            console.log(`[ArcWorker SDK] Wallet ${walletId} is EMPTY. Cross-checking /user/balances...`);
-            const userRes = await circleClient.get('/user/balances', {
-                headers: { 'X-User-Token': userToken }
-            });
-            console.log(`[ArcWorker SDK] Global /user/balances:`, JSON.stringify(userRes.data.data, null, 2));
-        }
-
-        return balances;
+        return balances || [];
     } catch (e: any) {
         console.error('[ArcWorker SDK] getCircleBalances Failed:', e.response?.data || e.message);
         throw e;
@@ -350,8 +344,8 @@ export async function getCircleUserTransactions(userToken: string) {
     try {
         console.log(`[ArcWorker SDK] Attempting to fetch transactions (Global Scan)...`);
 
-        const wallets = await getCircleWallet(userToken);
-        const walletIds = wallets.map((w: any) => w.id);
+        const wallets = await getCircleWallets(userToken);
+        const walletIds = (wallets || []).map((w: any) => w.id);
 
         const params: any = { pageSize: 15 }; // Fetch more for safety
         if (walletIds.length > 0) {

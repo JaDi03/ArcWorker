@@ -76,7 +76,10 @@ export const AgencySidebar: React.FC<AgencySidebarProps> = ({ activePage, onNavi
                 </div>
                 <button
                     onClick={() => {
-                        localStorage.removeItem('arc_user');
+                        // Limpiar TODA la sesión y caché
+                        Object.keys(localStorage).forEach(key => {
+                            if (key.startsWith('arc_')) localStorage.removeItem(key);
+                        });
                         window.location.href = '/';
                     }}
                     className="flex items-center px-2 py-2 text-red-400 hover:bg-gray-800 rounded-lg transition text-xs font-bold uppercase tracking-wide w-full"

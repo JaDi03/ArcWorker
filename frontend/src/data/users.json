@@ -19,7 +19,7 @@
     "walletAddress": "0x195cfec98f765ee2ca1d28c371f1de9ca21cc5b6",
     "role": "agency",
     "walletType": "circle",
-    "userId": null,
+    "userId": "masteragencia814@gmail.com",
     "createdAt": "2026-01-08T08:17:55.928Z"
   },
   {
@@ -29,7 +29,27 @@
     "walletAddress": "0x955e750d0fb95c4d7e9918ccd6b07c0db63ad026",
     "role": "worker",
     "walletType": "circle",
-    "userId": null,
+    "userId": "8365fb20-e65a-52a7-a3af-16addc0c2c36",
     "createdAt": "2026-01-08T08:22:26.120Z"
+  },
+  {
+    "username": "master1",
+    "password": "117516",
+    "email": "masteragenicia814@gmail.com",
+    "walletAddress": "0x9c7d24808cc5979d2770078c74f61cd23755a09e",
+    "role": "agency",
+    "walletType": "circle",
+    "userId": "masteragenicia814@gmail.com",
+    "createdAt": "2026-01-08T13:57:02.609Z"
+  },
+  {
+    "username": "agencia001",
+    "password": "candi",
+    "email": "agencia001@gmail.com",
+    "walletAddress": "0xdc1cdddea9b0dceb2451519620328342d682d382",
+    "role": "agency",
+    "walletType": "circle",
+    "userId": "agencia001@gmail.com",
+    "createdAt": "2026-01-08T21:55:31.697Z"
   }
 ]
