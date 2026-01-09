@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LayoutDashboard, Briefcase, History, TrendingUp, Wallet, LogOut, Bell, ChevronRight, Plus, Star, CheckCircle, Clock } from 'lucide-react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance } from 'wagmi';
 import { CONTRACTS } from '@/utils/contracts';
 import { useTasks } from '@/hooks/useTasks';
 import { formatUnits, parseEther } from 'viem';
@@ -29,6 +29,41 @@ export default function WorkerDashboard() {
     }, []);
 
     const address = (eoaAddress || circleAddress) as `0x${string}`;
+
+    // 0. Liquid Balance Fetching
+    const [liquidBalance, setLiquidBalance] = useState(0);
+    const { data: eoaBalanceData } = useBalance({
+        address: eoaAddress,
+        query: { enabled: !!eoaAddress }
+    });
+
+    useEffect(() => {
+        if (eoaBalanceData) {
+            setLiquidBalance(Number(formatUnits(eoaBalanceData.value, eoaBalanceData.decimals)));
+        }
+    }, [eoaBalanceData]);
+
+    useEffect(() => {
+        const fetchCircleBalance = async () => {
+            if (!circleAddress) return;
+            try {
+                const sessionToken = localStorage.getItem('arc_session_token');
+                const res = await fetch('/api/circle/wallet/balance', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userToken: sessionToken })
+                });
+                if (!res.ok) throw new Error('Failed to fetch balance');
+                const data = await res.json();
+                if (data.balances?.[0]) {
+                    setLiquidBalance(Number(data.balances[0].amount));
+                }
+            } catch (e) {
+                console.error("Error fetching circle balance", e);
+            }
+        };
+        fetchCircleBalance();
+    }, [circleAddress]);
 
     // 1. Data Fetching
     const { tasks: allTasks, isLoading: tasksLoading } = useTasks(undefined, address);
@@ -82,8 +117,8 @@ export default function WorkerDashboard() {
     }, []);
 
     const stats = useMemo(() => {
-        if (!vaultTotalShares || !vaultTotalAssets || !vaultTotalDeposited || !address) {
-            return { principal: 0, yield: 0, total: 0, liquidValue: 0 };
+        if (vaultTotalShares === undefined || vaultTotalAssets === undefined || vaultTotalDeposited === undefined || !address) {
+            return { principal: 0, yield: 0, totalSavings: 0, liquidValue: liquidBalance, totalPortfolio: liquidBalance };
         }
 
         const uShares = savingsShares ? BigInt(savingsShares as any) : BigInt(0);
@@ -91,29 +126,32 @@ export default function WorkerDashboard() {
         const vAssets = BigInt(vaultTotalAssets as any);
         const vPrincipal = BigInt(vaultTotalDeposited as any);
 
-        if (vShares === BigInt(0)) return { principal: 0, yield: 0, total: 0, liquidValue: 0 };
+        if (vShares === BigInt(0)) return { principal: 0, yield: 0, totalSavings: 0, liquidValue: liquidBalance, totalPortfolio: liquidBalance };
 
         const userValueBig = (uShares * vAssets) / vShares;
-        const userValue = Number(formatUnits(userValueBig, 18));
+        const userValue = Number(formatUnits(userValueBig, 6));
 
         let principal = 0;
         if (vAssets > BigInt(0)) {
             const userPrincipalBig = (userValueBig * vPrincipal) / vAssets;
-            principal = Number(formatUnits(userPrincipalBig, 18));
+            principal = Number(formatUnits(userPrincipalBig, 6));
         }
 
         return {
-            principal,
-            yield: userValue - principal,
-            total: userValue,
-            liquidValue: userValue
+            principal: principal || 0,
+            yield: (userValue - principal) || 0,
+            totalSavings: userValue || 0,
+            liquidValue: liquidBalance || 0,
+            totalPortfolio: (userValue + liquidBalance) || 0
         };
-    }, [savingsShares, vaultTotalAssets, vaultTotalDeposited, vaultTotalShares, address]);
+    }, [savingsShares, vaultTotalAssets, vaultTotalDeposited, vaultTotalShares, address, liquidBalance]);
 
-    // Live interpolation for UI "wow" factor
-    const totalDisplay = stats.total > 0
-        ? (stats.total + (stats.total * 0.05 / 31536000 * (now % 60000) / 1000)).toFixed(6)
+    // Live interpolation for UI "wow" factor (Applied only to savings/yields)
+    const savingsDisplay = (stats?.totalSavings || 0) > 0
+        ? ((stats?.totalSavings || 0) + ((stats?.totalSavings || 0) * 0.05 / 31536000 * (now % 60000) / 1000)).toFixed(6)
         : "0.000000";
+
+    const totalPortfolioDisplay = ((stats?.totalPortfolio || 0) + ((stats?.totalSavings || 0) > 0 ? ((stats?.totalSavings || 0) * 0.05 / 31536000 * (now % 60000) / 1000) : 0)).toFixed(2);
 
     // 3. Task Processing
     const mySubmissions = useMemo(() => {
@@ -144,7 +182,7 @@ export default function WorkerDashboard() {
     const { writeContract: withdraw, isPending: isWithdrawing } = useWriteContract();
 
     const handleWithdraw = async () => {
-        if (stats.total <= 0) return;
+        if (stats.totalSavings <= 0) return;
 
         // Use total value for withdrawing everything
         const amountWei = "0"; // Passing 0 triggers 'Withdraw Max' in contract
@@ -308,8 +346,8 @@ export default function WorkerDashboard() {
                                     <div>
                                         <p className="text-blue-100 text-sm font-medium mb-1">Available Balance</p>
                                         <h2 className="text-4xl font-bold tracking-tight font-mono">
-                                            ${totalDisplay.split('.')[0]}.
-                                            <span className="text-2xl opacity-80">{totalDisplay.split('.')[1]}</span>
+                                            ${totalPortfolioDisplay.split('.')[0]}.
+                                            <span className="text-2xl opacity-80">{totalPortfolioDisplay.split('.')[1]}</span>
                                         </h2>
                                     </div>
                                     <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
@@ -374,14 +412,14 @@ export default function WorkerDashboard() {
                                     <div>
                                         <p className="text-xs text-gray-500 mb-1">Total Savings + Yields</p>
                                         <p className="text-2xl font-bold text-gray-900 font-mono">
-                                            ${totalDisplay}
+                                            ${totalPortfolioDisplay}
                                             <span className="text-sm font-normal text-gray-400 block mt-1">
                                                 Principal: ${(stats.principal || 0).toFixed(2)}
                                             </span>
                                         </p>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: stats.total > 0 ? `${Math.min((stats.total / (stats.total + 10)) * 100, 100)}%` : '0%' }}></div>
+                                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: (stats.totalSavings || 0) > 0 ? `${Math.min(((stats.totalSavings || 0) / ((stats.totalSavings || 0) + 10)) * 100, 100)}%` : '0%' }}></div>
                                     </div>
                                     <p className="text-xs text-gray-500">
                                         Accrued Yield: <span className="font-bold text-green-600">${(stats.yield || 0).toFixed(6)}</span>
@@ -491,7 +529,7 @@ export default function WorkerDashboard() {
                                     </div>
                                     <div className="flex flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl">
                                         <p className="text-sm text-blue-600 font-bold uppercase tracking-widest mb-2">Current Asset Value</p>
-                                        <p className="text-5xl font-black text-gray-900 font-mono mb-6">${totalDisplay}</p>
+                                        <p className="text-5xl font-black text-gray-900 font-mono mb-6">${totalPortfolioDisplay}</p>
                                         <button
                                             onClick={handleWithdraw}
                                             disabled={isWithdrawing || stats.liquidValue <= 0}

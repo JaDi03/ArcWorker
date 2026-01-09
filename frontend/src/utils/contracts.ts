@@ -14,13 +14,13 @@ export const CONTRACTS = {
     UserRegistry: {
         address: "0x75fC403F9604c4F401A1aEcc9aDA649bfc6Ea986" as `0x${string}`, // Arc Testnet
         abi: [
-            "function register(string memory _name)",
-            "function resolve(string memory _name) view returns (address)",
-            "function getName(address _user) view returns (string memory)"
+            { name: "register", type: "function", inputs: [{ name: "_name", type: "string" }], outputs: [], stateMutability: "nonpayable" },
+            { name: "resolve", type: "function", inputs: [{ name: "_name", type: "string" }], outputs: [{ type: "address" }], stateMutability: "view" },
+            { name: "getName", type: "function", inputs: [{ name: "_user", type: "address" }], outputs: [{ type: "string" }], stateMutability: "view" }
         ]
     },
     MockYieldVault: {
-        address: "0xe0e2f4eA038B9dfb92B2761B752FBbE0cF292e" as `0x${string}`, // Arc Testnet (LATEST VAULT)
+        address: "0xe0e2f4eA038B9dFdfb92B2761B752FBbE0cF292e" as `0x${string}`, // Arc Testnet (LATEST VAULT)
         abi: MockYieldVaultArtifact.abi,
     }
 } as const;

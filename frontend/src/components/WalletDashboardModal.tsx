@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useSendTransaction, useConnect } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useSendTransaction, useConnect, usePublicClient } from 'wagmi';
 import { CONTRACTS } from '@/utils/contracts';
 import { parseEther, formatUnits } from 'viem';
 import { useArcWorkerWallet } from '@/arcworker-sdk/wallet';
@@ -15,6 +15,7 @@ interface WalletDashboardModalProps {
 export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboardModalProps) {
     const { address: wagmiAddress, isConnected: wagmiConnected, status } = useAccount();
     const { connectors, connect } = useConnect();
+    const publicClient = usePublicClient();
     const { getBalance: getCircleBalance, sendTransfer: sendCircleTransfer, setupArcWorkerWallet, isLoading: isCircleLoading, error: circleError } = useArcWorkerWallet();
 
     const [activeTab, setActiveTab] = useState<'ASSETS' | 'SEND' | 'RECEIVE' | 'ACTIVITY'>('ASSETS');
@@ -60,9 +61,21 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
     const [savingsAssets, setSavingsAssets] = useState<string>('0.00');
     const [isWithdrawing, setIsWithdrawing] = useState(false);
 
-    // Unified Address & Connection
+    // Simplified Address & Connection
     const address = isCircle ? circleAddress : wagmiAddress;
     const isConnected = isCircle ? !!circleAddress : wagmiConnected;
+
+    // Detect Role (Simplified)
+    const [isWorker, setIsWorker] = useState(false);
+    useEffect(() => {
+        const savedUser = localStorage.getItem('arc_user');
+        if (savedUser) {
+            try {
+                const user = JSON.parse(savedUser);
+                setIsWorker(user.role === 'worker');
+            } catch (e) { }
+        }
+    }, []);
 
     // Balance (Standard Wagmi)
     const { data: wagmiBalanceData, isLoading: isWagmiBalanceLoading, refetch: refetchWagmiBalance } = useBalance({
@@ -75,8 +88,10 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
     const { isLoading: isWagmiConfirming, isSuccess: isWagmiSuccess } = useWaitForTransactionReceipt({ hash });
 
     // ON-CHAIN REGISTRATION (For existing users)
+    const [isManualRegistering, setIsManualRegistering] = useState(false);
     const { writeContract: writeUserRegistry, data: regHash } = useWriteContract();
-    const { isLoading: isRegisteringOnChain, isSuccess: isRegSuccess } = useWaitForTransactionReceipt({ hash: regHash });
+    const { isLoading: isWagmiRegistering, isSuccess: isRegSuccess } = useWaitForTransactionReceipt({ hash: regHash });
+    const isRegisteringOnChain = isManualRegistering || isWagmiRegistering;
 
     // Check if current address is already registered
     const { data: currentAddressName } = useReadContract({
@@ -213,7 +228,7 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
 
     useEffect(() => {
         if (rawSavingsAssets) {
-            setSavingsAssets(formatUnits(rawSavingsAssets as bigint, 18));
+            setSavingsAssets(formatUnits(rawSavingsAssets as bigint, 6));
         } else {
             setSavingsAssets('0.00');
         }
@@ -321,6 +336,47 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
 
         if (isCircle) {
             try {
+                // 1. Check availability first (Viem/PublicClient)
+                if (publicClient) {
+                    setIsManualRegistering(true);
+                    try {
+                        const owner = await publicClient.readContract({
+                            address: CONTRACTS.UserRegistry.address,
+                            abi: CONTRACTS.UserRegistry.abi,
+                            functionName: 'resolve',
+                            args: [username]
+                        }) as string;
+
+                        if (owner !== "0x0000000000000000000000000000000000000000") {
+                            setIsManualRegistering(false);
+                            if (address && owner.toLowerCase() === address.toLowerCase()) {
+                                alert("¡Ya estás registrado con este nombre! Refrescando interfaz...");
+                                window.location.reload();
+                                return;
+                            }
+                            alert(`El nombre @${username} ya está siendo usado por otro usuario. Intenta con uno diferente.`);
+                            return;
+                        }
+
+                        // 2. Also check if address already has a name
+                        const existingName = await publicClient.readContract({
+                            address: CONTRACTS.UserRegistry.address,
+                            abi: CONTRACTS.UserRegistry.abi,
+                            functionName: 'getName',
+                            args: [address as `0x${string}`]
+                        }) as string;
+
+                        if (existingName && existingName.length > 0) {
+                            setIsManualRegistering(false);
+                            alert(`Tu billetera ya está registrada con el nombre @${existingName}.`);
+                            window.location.reload();
+                            return;
+                        }
+                    } catch (readErr) {
+                        console.warn("Pre-check failed, proceeding with transaction...", readErr);
+                    }
+                }
+
                 const sessionToken = localStorage.getItem('arc_session_token');
                 const { data } = await axios.post('/api/circle/contract/register-name', {
                     userToken: sessionToken,
@@ -336,7 +392,7 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                     });
 
                     // Show success state instead of instant reload
-                    alert("Registration initiated! It will take a few moments to appear on-chain.");
+                    alert("¡Registro iniciado! La transacción se está procesando en la red Arc.");
                     setIsCircleSuccess(true);
 
                     // Small delay & refresh local state
@@ -345,8 +401,16 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                     }, 3000);
                 }
             } catch (err: any) {
+                setIsManualRegistering(false);
                 console.error("Circle Register Error:", err);
                 const errorData = err.response?.data?.details || err.response?.data;
+
+                // Decode common errors
+                if (errorData?.message?.includes('already taken') || JSON.stringify(errorData).includes('taken')) {
+                    alert(`El nombre @${username} ya está ocupado. Elige otro.`);
+                    return;
+                }
+
                 if (errorData?.code === 155104 || errorData?.message?.includes('expired')) {
                     console.log("[Register] Session expired, refreshing...");
                     const savedUser = localStorage.getItem('arc_user');
@@ -356,7 +420,6 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                             if (user.username) {
                                 const fresh = await setupArcWorkerWallet(user.username, 'worker', 'circle', { skipCreation: true });
                                 if (fresh) {
-                                    // Retry once
                                     handleRegisterOnChain();
                                     return;
                                 }
@@ -366,9 +429,35 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                         }
                     }
                 }
-                alert("Circle Registration Error: " + (err.response?.data?.details?.message || err.message));
+                alert("Error de registro: " + (err.response?.data?.details?.message || err.message));
             }
         } else {
+            // Pre-check for Wagmi/MetaMask
+            setIsManualRegistering(true);
+            if (publicClient) {
+                try {
+                    const owner = await publicClient.readContract({
+                        address: CONTRACTS.UserRegistry.address,
+                        abi: CONTRACTS.UserRegistry.abi,
+                        functionName: 'resolve',
+                        args: [username]
+                    }) as string;
+
+                    if (owner !== "0x0000000000000000000000000000000000000000") {
+                        setIsManualRegistering(false);
+                        if (address && owner.toLowerCase() === address.toLowerCase()) {
+                            alert("¡Ya estás registrado con este nombre!");
+                            window.location.reload();
+                            return;
+                        }
+                        alert(`El nombre @${username} ya está siendo usado por otro usuario. Intenta con uno diferente.`);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn("Pre-check failed", e);
+                }
+            }
+
             writeUserRegistry({
                 address: CONTRACTS.UserRegistry.address,
                 abi: CONTRACTS.UserRegistry.abi,
@@ -383,12 +472,17 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
     const isSuccess = isCircle ? isCircleSuccess : isWagmiSuccess;
     const sendError = isCircle ? circleError : wagmiSendError; // Error handling improved below
 
-    // Safely format WAGMI balance
+    // Safely format balances
     const formattedWagmiBalance = wagmiBalanceData
         ? formatUnits(wagmiBalanceData.value, wagmiBalanceData.decimals)
         : '0.00';
 
-    const balanceDisplay = isCircle ? Number(circleBalance).toFixed(2) : Number(formattedWagmiBalance).toFixed(2);
+    const liquidBalance = isCircle ? Number(circleBalance) : Number(formattedWagmiBalance);
+    const savingsBalance = Number(savingsAssets);
+    const totalBalance = liquidBalance + savingsBalance;
+
+    const balanceDisplay = totalBalance.toFixed(2);
+    const liquidDisplay = liquidBalance.toFixed(2);
 
     const isAddressValid = resolvedAddress || (recipient.startsWith('0x') && recipient.length === 42);
 
@@ -500,13 +594,14 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                                             $
                                         </div>
                                         <div className="ml-3 text-left">
-                                            <p className="font-bold text-slate-900 text-sm">USDC</p>
+                                            <p className="font-bold text-slate-900 text-sm">USDC (Liquid)</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Available for transfers</p>
                                         </div>
                                     </div>
-                                    <span className="font-bold text-slate-700">{balanceDisplay}</span>
+                                    <span className="font-bold text-slate-700">{liquidDisplay}</span>
                                 </div>
 
-                                {/* Business Savings Row (Funds from cancelled tasks) */}
+                                {/* Business Savings Row (Funds from cancelled tasks or earnings) */}
                                 {Number(savingsAssets) > 0 && (
                                     <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 flex flex-col space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-700">
                                         <div className="flex items-center justify-between">
@@ -515,12 +610,15 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                                                     🏦
                                                 </div>
                                                 <div className="ml-3 text-left">
-                                                    <p className="font-bold text-indigo-900 text-sm">Business Savings</p>
-                                                    <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter">Refunded from cancelled tasks</p>
+                                                    <p className="font-bold text-indigo-900 text-sm">{isWorker ? 'Earnings Savings' : 'Business Savings'}</p>
+                                                    <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter">
+                                                        {isWorker ? 'Earning 5% APY effectively' : 'Refunded from cancelled tasks'}
+                                                    </p>
                                                 </div>
                                             </div>
                                             <div className="text-right">
                                                 <p className="font-black text-indigo-700 text-lg">${Number(savingsAssets).toFixed(2)}</p>
+                                                {isWorker && <span className="text-[8px] bg-green-200 text-green-700 px-1 rounded font-bold">5% APY</span>}
                                             </div>
                                         </div>
                                         <button
