@@ -53,7 +53,7 @@ export async function platformAutoVerify(taskId: number | bigint) {
         console.log(`[Platform Admin] Starting auto-verify for task ${taskId}...`);
         const client = getPlatformClient();
         const id = BigInt(taskId);
-        let retries = 5;
+        let retries = 20; // Wait up to ~60 seconds for the transaction to be indexed
         let processed = false;
 
         while (retries > 0 && !processed) {
@@ -72,13 +72,13 @@ export async function platformAutoVerify(taskId: number | bigint) {
 
             if (status === 2) {
                 console.log(`[Platform Admin] Task ${taskId} is already approved.`);
-                return true;
+                return { success: true, reason: "Already approved" };
             }
 
             if (status === 0 || status === 1) {
                 // 2. Fetch Latest Submission
                 if (currentSubmissions === 0) {
-                    console.log(`[Platform Admin] Task ${taskId} has no submissions yet. Waiting...`);
+                    console.log(`[Platform Admin] Task ${taskId} has no submissions yet. Waiting for indexing... (Retry ${21 - retries}/20)`);
                 } else {
                     console.log(`[Platform Admin] Task ${taskId} has ${currentSubmissions} submissions. Validating last one...`);
 
@@ -96,14 +96,10 @@ export async function platformAutoVerify(taskId: number | bigint) {
 
                         let metadata: any = {};
                         try {
-                            // Try parsing as JSON first (Optimized storage)
                             metadata = JSON.parse(metadataStr);
                         } catch (e) {
-                            console.warn(`[Platform Admin] Metadata for task ${taskId} is not valid JSON. Likely IPFS Hash: ${metadataStr}`);
-                            // TODO: Add IPFS fetcher here if we move back to IPFS-only.
-                            // For now, if we can't parse metadata, we can't check 'correctAnswer'.
-                            // However, if the task is simple, maybe we defaults?
-                            return false;
+                            console.warn(`[Platform Admin] Metadata for task ${taskId} is not valid JSON.`);
+                            return { success: false, reason: "Invalid JSON metadata in task" };
                         }
 
                         // Flexible Strategy Check
@@ -112,7 +108,7 @@ export async function platformAutoVerify(taskId: number | bigint) {
 
                         if (!isAuto) {
                             console.log(`[Platform Admin] Task ${taskId} strategy '${strategy}' does not imply auto-verify. Skipping.`);
-                            return false;
+                            return { success: false, reason: `Strategy '${strategy}' is not auto-verifiable` };
                         }
 
                         const correctAnswer = metadata.correctAnswer?.trim().toLowerCase();
@@ -122,7 +118,7 @@ export async function platformAutoVerify(taskId: number | bigint) {
 
                         if (!correctAnswer) {
                             console.warn(`[Platform Admin] Task ${taskId} has auto-verify enabled but no 'correctAnswer' in metadata.`);
-                            return false;
+                            return { success: false, reason: "Metadata missing 'correctAnswer'" };
                         }
 
                         if (submission === correctAnswer) {
@@ -136,27 +132,29 @@ export async function platformAutoVerify(taskId: number | bigint) {
                             });
                             console.log(`[Platform Admin] Task ${taskId} auto-approved! Hash: ${hash}`);
                             processed = true;
-                            return hash;
+                            return { success: true, txHash: hash };
                         } else {
                             console.log(`[Platform Admin] MISMATCH: '${submission}' !== '${correctAnswer}'. Manual review or consensus required.`);
-                            return false;
+                            return { success: false, reason: `Mismatch: Expected '${correctAnswer}' but got '${submission}'` };
                         }
 
                     } catch (err: any) {
                         console.error(`[Platform Admin] Error processing validation for task ${taskId}:`, err.message);
-                        // Fallback: maybe the index is different? Non-critical, just log.
+                        // continue loop
                     }
                 }
             }
 
-            console.log(`[Platform Admin] Task ${taskId} status: ${status}. Waiting... (${retries} retries)`);
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            retries--;
+            if (!processed) {
+                console.log(`[Platform Admin] Task ${taskId} status: ${status}. Waiting... (${retries} retries left)`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                retries--;
+            }
         }
 
-        return null;
+        return { success: false, reason: "Timeout: Submission not found or indexing too slow" };
     } catch (error: any) {
         console.error(`[Platform Admin] Error in auto-verify for task ${taskId}:`, error.message);
-        return null;
+        return { success: false, reason: `Exception: ${error.message}` };
     }
 }

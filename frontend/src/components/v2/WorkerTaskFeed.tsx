@@ -311,6 +311,26 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
 
             console.log(`[Worker Feed] Submitting answer: "${answer}" for Task #${selectedTask.id}`);
 
+            // Helper to trigger verification
+            const triggerAutoVerify = async (id: string) => {
+                try {
+                    console.log(`[Worker Feed] Triggering auto-verification for task ${id}...`);
+                    const res = await fetch('/api/tasks/auto-verify', {
+                        method: 'POST',
+                        body: JSON.stringify({ taskId: id })
+                    });
+                    const d = await res.json();
+                    if (d.success) {
+                        alert(`Auto-verification Success: ${d.message}`);
+                    } else {
+                        alert(`Auto-verification Failed: ${d.error}`);
+                    }
+                } catch (e: any) {
+                    console.error("Auto-verify trigger failed:", e);
+                    alert(`Auto-verification Error: ${e.message}`);
+                }
+            };
+
             if (isConnected) {
                 // EOA Flow
                 await writeSubmit({
@@ -320,6 +340,9 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
                     args: [BigInt(selectedTask.id), answer],
                 });
                 alert("Task submitted successfully via Wallet!");
+
+                // Trigger Verification (Fire and forget)
+                triggerAutoVerify(selectedTask.id);
 
                 // Optimistic Update
                 const taskHash = selectedTask.metadata?.metadataHash || selectedTask.id; // Fallback to ID
@@ -372,6 +395,10 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
                 }
 
                 alert("Task submitted successfully via Circle!");
+
+                // Trigger Verification (Fire and forget)
+                // NOW SAFE: The SDK has confirmed execution!
+                triggerAutoVerify(selectedTask.id);
 
                 // Optimistic Update
                 const taskHash = selectedTask.metadata?.metadataHash || selectedTask.id; // Fallback to ID

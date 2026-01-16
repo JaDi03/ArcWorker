@@ -62,12 +62,8 @@ export async function POST(request: Request) {
         );
 
         // 4. Platform Auto-Verify Logic
-        // For micro-tasks in this demo, we auto-verify after submission.
-        // We trigger it in the background so as not to block the response.
-        console.log(`[API] Triggering auto-verify for task ${taskId}...`);
-        platformAutoVerify(taskId).catch(err => {
-            console.error(`[API] Auto-verify background error:`, err);
-        });
+        // MOVED: We now trigger this from the frontend AFTER the user signs the challenge.
+        // This prevents the "race condition" where we checked for a tx that hadn't been broadcast yet.
 
         return NextResponse.json({ challengeId, userToken, appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID, encryptionKey });
     } catch (error: any) {
