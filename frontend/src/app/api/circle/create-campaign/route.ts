@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { parseUnits } from 'viem';
 import {
     createCircleContractCall,
     createCircleSession,
@@ -26,7 +27,11 @@ export async function POST(request: Request) {
         const requiredSubmissions = body.requiredSubmissions || 1;
         const correctAnswerHash = body.correctAnswerHash || "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-        const rewardInAtoms = Math.round(parseFloat(rewardPerTask) * 1e6);
+        // CRITICAL FIX: Arc Testnet Native USDC (Gas) is 18 decimals.
+        // Even if the ERC-20 interface says 6, the system expects 18-decimal raw values for native transfers.
+        // We must send 10^18 units to transfer 1 full token.
+        const rewardInAtoms = parseUnits(rewardPerTask.toString(), 18);
+        const totalAmountInAtoms = parseUnits(amount.toString(), 18); // Use 18 decimals for total amount
         const deadlineSeconds = deadlineDays * 24 * 3600;
 
         args = [
@@ -74,7 +79,7 @@ export async function POST(request: Request) {
 
         if (!wallet) return NextResponse.json({ error: 'No wallet found' }, { status: 400 });
 
-        const amountInUsdc = parseFloat(amountStr).toFixed(6);
+        const amountInUsdc = parseFloat(amountStr).toFixed(6); // USDC uses 6 decimals
         const functionSignature = 'createTasksBatch(uint256,uint256,uint256,string,uint256,bytes32)';
 
         console.log(`[Circle API] Executing ${functionSignature} | Value: ${amountInUsdc}`);
@@ -108,7 +113,7 @@ export async function POST(request: Request) {
             userToken: sessionToken,
             encryptionKey: sessionKey,
             challengeId: challengeId,
-            appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID,
+            appId: process.env.CIRCLE_APP_ID || process.env.NEXT_PUBLIC_CIRCLE_APP_ID,
             userId: bridgedId
         });
 

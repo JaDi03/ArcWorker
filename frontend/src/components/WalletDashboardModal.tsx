@@ -11,9 +11,10 @@ import { Eye, EyeOff, Copy } from 'lucide-react';
 interface WalletDashboardModalProps {
     isOpen: boolean;
     onClose: () => void;
+    externalSavingsBalance?: string; // Optional prop to sync with dashboard
 }
 
-export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboardModalProps) {
+export default function WalletDashboardModal({ isOpen, onClose, externalSavingsBalance }: WalletDashboardModalProps) {
     const { address: wagmiAddress, isConnected: wagmiConnected, status } = useAccount();
     const { connectors, connect } = useConnect();
     const publicClient = usePublicClient();
@@ -79,7 +80,7 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
         }
     }, []);
 
-    // Balance (Standard Wagmi)
+    // Balance (Native USDC on Arc)
     const { data: wagmiBalanceData, isLoading: isWagmiBalanceLoading, refetch: refetchWagmiBalance } = useBalance({
         address: wagmiAddress,
         query: { enabled: !isCircle && !!wagmiAddress }
@@ -281,12 +282,15 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
     });
 
     useEffect(() => {
-        if (rawSavingsAssets) {
-            setSavingsAssets(formatUnits(rawSavingsAssets as bigint, 6));
+        if (externalSavingsBalance) {
+            setSavingsAssets(externalSavingsBalance);
+        } else if (rawSavingsAssets) {
+            // Vault uses 18 decimals for internal accounting/assets conversion
+            setSavingsAssets(formatUnits(rawSavingsAssets as bigint, 18));
         } else {
             setSavingsAssets('0.00');
         }
-    }, [rawSavingsAssets]);
+    }, [rawSavingsAssets, externalSavingsBalance]);
 
     const { writeContract: writeWithdraw, data: withdrawHash } = useWriteContract();
     const { isLoading: isWithdrawConfirming, isSuccess: isWithdrawSuccess } = useWaitForTransactionReceipt({ hash: withdrawHash });
@@ -545,8 +549,8 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
     const savingsBalance = Number(savingsAssets);
     const totalBalance = liquidBalance + savingsBalance;
 
-    const balanceDisplay = totalBalance.toFixed(6);
-    const liquidDisplay = liquidBalance.toFixed(6);
+    const balanceDisplay = totalBalance.toFixed(2);
+    const liquidDisplay = liquidBalance.toFixed(2);
 
     const isAddressValid = resolvedAddress || (recipient.startsWith('0x') && recipient.length === 42);
 
@@ -723,25 +727,79 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-black text-blue-700 text-lg">${Number(savingsAssets).toFixed(6)}</p>
+                                                <p className="font-black text-blue-700 text-lg">${Number(savingsAssets).toFixed(4)}</p>
                                                 {isWorker && <span className="text-[8px] bg-green-200 text-green-700 px-1 rounded font-bold">5% APY</span>}
                                             </div>
                                         </div>
                                         <button
-                                            onClick={() => {
+                                            onClick={async () => {
                                                 if (!window.confirm("Withdraw all savings to your wallet?")) return;
                                                 setIsWithdrawing(true);
-                                                writeWithdraw({
-                                                    address: CONTRACTS.TaskEscrow.address,
-                                                    abi: CONTRACTS.TaskEscrow.abi,
-                                                    functionName: 'withdrawSavings',
-                                                    args: [BigInt(0)] // 0 means ALL
-                                                });
+
+                                                if (isCircle) {
+                                                    try {
+                                                        const savedUser = localStorage.getItem('arc_user');
+                                                        if (!savedUser) throw new Error("User not found");
+                                                        const user = JSON.parse(savedUser);
+                                                        const userId = user.id || user.userId;
+                                                        const userToken = localStorage.getItem('arc_session_token');
+                                                        const encryptionKey = localStorage.getItem('arc_encryption_key');
+
+                                                        // Use "0" to indicate "Withdraw All" to the contract.
+                                                        // This avoids floating point precision mismatches (e.g. 3.14999 vs 3.15)
+                                                        // causing "Insufficient funds" errors.
+                                                        const amountWei = "0";
+
+                                                        const res = await axios.post('/api/circle/withdraw', {
+                                                            userId,
+                                                            amount: amountWei,
+                                                            userToken,
+                                                            encryptionKey
+                                                        });
+
+                                                        const data = res.data;
+                                                        if (data.error) throw new Error(data.error);
+
+                                                        const { W3SSdk } = await import('@circle-fin/w3s-pw-web-sdk');
+                                                        const sdk = new W3SSdk();
+                                                        sdk.setAppSettings({ appId: data.appId });
+                                                        sdk.setAuthentication({
+                                                            userToken: data.userToken,
+                                                            encryptionKey: data.encryptionKey
+                                                        });
+
+                                                        await new Promise((resolve, reject) => {
+                                                            sdk.execute(data.challengeId, (error: any, result: any) => {
+                                                                if (error) reject(error);
+                                                                else resolve(result);
+                                                            });
+                                                        });
+
+                                                        alert("✅ Withdrawal Successful!");
+                                                        refetchSavings();
+                                                        fetchCircleBalance();
+                                                    } catch (e: any) {
+                                                        console.error("Circle Withdraw Error:", e);
+                                                        if (!e.message?.includes("User rejected")) {
+                                                            alert("Withdrawal Failed: " + (e.message || "Unknown Error"));
+                                                        }
+                                                    } finally {
+                                                        setIsWithdrawing(false);
+                                                    }
+                                                } else {
+                                                    // Wagmi Flow
+                                                    writeWithdraw({
+                                                        address: CONTRACTS.TaskEscrow.address,
+                                                        abi: CONTRACTS.TaskEscrow.abi,
+                                                        functionName: 'withdrawSavings',
+                                                        args: [BigInt(0)] // 0 means ALL
+                                                    });
+                                                }
                                             }}
                                             disabled={isWithdrawing || isWithdrawConfirming}
                                             className="w-full h-10 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
                                         >
-                                            {isWithdrawing || isWithdrawConfirming ? 'Processing...' : 'Withdraw to Wallet'}
+                                            {isCircle ? (isWithdrawing ? 'Processing...' : 'Withdraw to Wallet') : (isWithdrawing || isWithdrawConfirming ? 'Processing...' : 'Withdraw to Wallet')}
                                         </button>
                                     </div>
                                 )}
@@ -985,6 +1043,6 @@ export default function WalletDashboardModal({ isOpen, onClose }: WalletDashboar
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

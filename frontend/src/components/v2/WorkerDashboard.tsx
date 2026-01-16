@@ -12,37 +12,45 @@ export default function WorkerDashboard() {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'market' | 'history' | 'investments'>('dashboard');
     const [isWalletOpen, setIsWalletOpen] = useState(false);
     const { address: eoaAddress, isConnected } = useAccount();
-    const [circleAddress, setCircleAddress] = useState<string | null>(null);
-    const [user, setUser] = useState<any>(null);
+    const [user, setUser] = useState<any>(() => {
+        if (typeof window !== 'undefined') {
+            const stored = localStorage.getItem('arc_user');
+            if (stored) {
+                try {
+                    return JSON.parse(stored);
+                } catch (e) {
+                    console.error("Error parsing user data", e);
+                }
+            }
+        }
+        return null;
+    });
+
+    const [circleAddress, setCircleAddress] = useState<string | null>(() => {
+        return user?.address || null;
+    });
+
     const [now, setNow] = useState(Date.now());
     const [showAddress, setShowAddress] = useState(false); // Default hidden for privacy
 
-    useEffect(() => {
-        const stored = localStorage.getItem('arc_user');
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored);
-                setUser(parsed);
-                setCircleAddress(parsed.address);
-            } catch (e) {
-                console.error("Error parsing user data", e);
-            }
-        }
-    }, []);
-
-    const address = (eoaAddress || circleAddress) as `0x${string}`;
+    // Prioritize Circle Address if we are in a Circle session
+    const address = (user?.walletType === 'circle' ? circleAddress : (eoaAddress || circleAddress)) as `0x${string}`;
 
     // 0. Liquid Balance Fetching
     const [liquidBalance, setLiquidBalance] = useState(0);
     const [liveYield, setLiveYield] = useState<string>('0.000000');
-    const { data: eoaBalanceData, refetch: refetchWagmiBalance } = useBalance({
-        address: eoaAddress,
+    const { data: eoaBalanceData, refetch: refetchWagmiBalance } = useReadContract({
+        address: CONTRACTS.USDC.address as `0x${string}`,
+        abi: CONTRACTS.USDC.abi,
+        functionName: 'balanceOf',
+        args: [eoaAddress as `0x${string}`],
         query: { enabled: !!eoaAddress }
     });
 
     useEffect(() => {
-        if (eoaBalanceData) {
-            setLiquidBalance(Number(formatUnits(eoaBalanceData.value, eoaBalanceData.decimals)));
+        if (eoaBalanceData !== undefined) {
+            // USDC uses 6 decimals
+            setLiquidBalance(Number(formatUnits(eoaBalanceData as unknown as bigint, 6)));
         }
     }, [eoaBalanceData]);
 
@@ -132,12 +140,12 @@ export default function WorkerDashboard() {
         if (vShares === BigInt(0)) return { principal: 0, yield: 0, totalSavings: 0, liquidValue: liquidBalance, totalPortfolio: liquidBalance };
 
         const userValueBig = (uShares * vAssets) / vShares;
-        const userValue = Number(formatUnits(userValueBig, 6));
+        const userValue = Number(formatUnits(userValueBig, 18));
 
         let principal = 0;
         if (vAssets > BigInt(0)) {
             const userPrincipalBig = (userValueBig * vPrincipal) / vAssets;
-            principal = Number(formatUnits(userPrincipalBig, 6));
+            principal = Number(formatUnits(userPrincipalBig, 18));
         }
 
         return {
@@ -151,7 +159,7 @@ export default function WorkerDashboard() {
 
     // Live interpolation for UI "wow" factor (Applied only to savings/yields)
     const savingsDisplay = (stats?.totalSavings || 0) > 0
-        ? ((stats?.totalSavings || 0) + ((stats?.totalSavings || 0) * 0.05 / 31536000 * (now % 60000) / 1000)).toFixed(6)
+        ? ((stats?.totalSavings || 0) + ((stats?.totalSavings || 0) * 0.05 / 31536000 * (now % 60000) / 1000)).toFixed(18)
         : "0.000000";
 
     const totalPortfolioDisplay = ((stats?.totalPortfolio || 0) + ((stats?.totalSavings || 0) > 0 ? ((stats?.totalSavings || 0) * 0.05 / 31536000 * (now % 60000) / 1000) : 0)).toFixed(2);
@@ -185,7 +193,12 @@ export default function WorkerDashboard() {
     const { writeContract: withdraw, data: withdrawHash, isPending: isWithdrawPending } = useWriteContract();
     const { isSuccess: isWithdrawSuccess, isLoading: isWithdrawConfirming } = useWaitForTransactionReceipt({ hash: withdrawHash });
 
-    const isWithdrawing = isWithdrawPending || isWithdrawConfirming;
+    // We need manual control for Circle (API) + Auto control for Wagmi (Hook)
+    const [isManualWithdrawing, setIsManualWithdrawing] = useState(false);
+    const isWithdrawing = isWithdrawPending || isWithdrawConfirming || isManualWithdrawing;
+
+    // Helper to unify state setting
+    const setIsWithdrawing = (state: boolean) => setIsManualWithdrawing(state);
 
     useEffect(() => {
         if (isWithdrawSuccess) {
@@ -200,13 +213,14 @@ export default function WorkerDashboard() {
         if (stats.totalSavings <= 0) return;
 
         // Use total value for withdrawing everything
-        // Explicitly calculate max amount to withdraw to avoid "0" ambiguity
-        const amountWei = stats.totalSavings > 0
-            ? parseUnits(stats.totalSavings.toFixed(6), 6)
-            : BigInt(0);
+        // Use "0" to indicate "Withdraw All" to the contract.
+        // This avoids floating point precision mismatches (e.g. 3.14999 vs 3.15)
+        // causing "Insufficient funds" errors.
+        const amountWei = BigInt(0);
 
         const circleUser = localStorage.getItem('arc_user');
         if (circleUser && !isConnected) {
+            setIsManualWithdrawing(true);
             try {
                 const userData = JSON.parse(circleUser);
                 const userId = userData.id || userData.userId;
@@ -218,7 +232,7 @@ export default function WorkerDashboard() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         userId,
-                        amount: amountWei,
+                        amount: amountWei.toString(),
                         userToken,
                         encryptionKey
                     })
@@ -246,12 +260,17 @@ export default function WorkerDashboard() {
                 refetchShares();
                 refetchShares();
             } catch (e: any) {
+                console.error("Circle withdrawal error:", e);
+                setIsWithdrawing(false); // Reset button state
                 if (e.message.toLowerCase().includes("user rejected") || e.message.toLowerCase().includes("cancelled")) {
                     // User cancelled, do nothing
                     return;
                 }
                 alert(`Withdrawal Failed: ${e.message}`);
             }
+            // Do NOT unconditionally return here, setIsWithdrawing(false) handles the reset.
+            // If success, we relied on page refresh or state update, but for now let's just reset state.
+            setIsWithdrawing(false);
             return;
         }
 
@@ -342,12 +361,12 @@ export default function WorkerDashboard() {
                 {/* User Profile */}
                 <div className="p-4 border-t border-white/10">
                     <div className="flex items-center gap-3 p-4 border border-white/10 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition backdrop-blur-sm">
-                        <div className="w-10 h-10 rounded-full bg-white text-[#005edc] flex items-center justify-center font-bold shadow-sm">
+                        <div className="w-10 h-10 rounded-full bg-white text-[#005edc] flex items-center justify-center font-bold shadow-sm" suppressHydrationWarning>
                             {user?.username?.charAt(0).toUpperCase() || 'W'}
                         </div>
                         <div>
-                            <h4 className="text-sm font-bold text-white truncate w-32">{user?.username || 'Worker Account'}</h4>
-                            <p className="text-[10px] text-white/70 font-mono truncate w-32">
+                            <h4 className="text-sm font-bold text-white truncate w-32" suppressHydrationWarning>{user?.username || 'Worker Account'}</h4>
+                            <p className="text-[10px] text-white/70 font-mono truncate w-32" suppressHydrationWarning>
                                 {address ? `${address.substring(0, 6)}...${address.substring(38)}` : '0x...'}
                             </p>
                         </div>
@@ -375,7 +394,7 @@ export default function WorkerDashboard() {
 
                 {activeTab === 'market' ? (
                     <div className="p-8">
-                        <WorkerTaskFeed />
+                        <WorkerTaskFeed onBack={() => setActiveTab('dashboard')} />
                     </div>
                 ) : (
                     <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -403,8 +422,8 @@ export default function WorkerDashboard() {
                                                 {/* Hidden address on hover for clean look? Or keep it visible? Keeping simple for now */}
                                             </div>
                                             <h2 className="text-5xl font-black tracking-tighter font-mono text-white drop-shadow-sm">
-                                                ${(Number(stats.totalSavings || 0) + Number(liveYield)).toFixed(2).split('.')[0]}
-                                                <span className="text-3xl opacity-60 font-medium">.{(Number(stats.totalSavings || 0) + Number(liveYield)).toFixed(6).split('.')[1]}</span>
+                                                ${(Number(stats.totalSavings || 0)).toFixed(2).split('.')[0]}
+                                                <span className="text-3xl opacity-60 font-medium">.{(Number(stats.totalSavings || 0)).toFixed(2).split('.')[1]}</span>
                                             </h2>
                                             <div className="mt-2 flex items-center gap-2">
                                                 <div
@@ -413,7 +432,7 @@ export default function WorkerDashboard() {
                                                 >
                                                     <div className="flex items-center gap-2">
                                                         <Wallet className="w-3.5 h-3.5 text-blue-200" />
-                                                        <span className="text-[11px] font-mono text-blue-100 tracking-tight">
+                                                        <span className="text-[11px] font-mono text-blue-100 tracking-tight" suppressHydrationWarning>
                                                             {showAddress
                                                                 ? (address ? `${address.substring(0, 6)}...${address.substring(38)}` : '0x...')
                                                                 : '****...****'
@@ -468,24 +487,38 @@ export default function WorkerDashboard() {
                                     <h3 className="font-bold text-gray-700">Performance</h3>
                                     <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs font-bold">Excellent</span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-xs text-gray-500 uppercase font-semibold">Total Earned</p>
-                                        <p className="text-2xl font-bold text-gray-900">${performanceStats.totalEarned}</p>
+                                {tasksLoading ? (
+                                    <div className="animate-pulse space-y-4">
+                                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="h-10 bg-gray-200 rounded"></div>
+                                            <div className="h-10 bg-gray-200 rounded"></div>
+                                            <div className="h-10 bg-gray-200 rounded"></div>
+                                            <div className="h-10 bg-gray-200 rounded"></div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500 uppercase font-semibold">Approval Rate</p>
-                                        <p className="text-2xl font-bold text-green-600">{performanceStats.approvalRate}%</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500 uppercase font-semibold">Tasks Completed</p>
-                                        <p className="text-2xl font-bold text-gray-900">{performanceStats.tasksCount}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500 uppercase font-semibold">Pending</p>
-                                        <p className="text-2xl font-bold text-yellow-600">{pendingTasks.length}</p>
-                                    </div>
-                                </div>
+                                ) : (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <p className="text-xs text-gray-500 uppercase font-semibold">Lifetime Earnings</p>
+                                                <p className="text-2xl font-bold text-gray-900">${performanceStats.totalEarned}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500 uppercase font-semibold">Approval Rate</p>
+                                                <p className="text-2xl font-bold text-green-600">{performanceStats.approvalRate}%</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500 uppercase font-semibold">Tasks Completed</p>
+                                                <p className="text-2xl font-bold text-gray-900">{performanceStats.tasksCount}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500 uppercase font-semibold">Pending</p>
+                                                <p className="text-2xl font-bold text-yellow-600">{pendingTasks.length}</p>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Investment Quick View (The one the user asked to modify) */}
@@ -503,7 +536,7 @@ export default function WorkerDashboard() {
                                     <div>
                                         <p className="text-xs text-gray-500 mb-1">Total Protocol Savings</p>
                                         <p className="text-2xl font-bold text-gray-900 font-mono">
-                                            ${(Number(stats.totalSavings || 0) + Number(liveYield)).toFixed(6)}
+                                            ${(Number(stats.totalSavings || 0)).toFixed(2)}
                                             <span className="text-sm font-normal text-gray-400 block mt-1">
                                                 Principal: ${(stats.principal || 0).toFixed(2)}
                                             </span>
@@ -599,11 +632,11 @@ export default function WorkerDashboard() {
                                         <div className="flex flex-col gap-4">
                                             <div className="flex justify-between items-center pb-4 border-b">
                                                 <span className="text-gray-500">Principal Deposit</span>
-                                                <span className="font-bold font-mono">${stats.principal.toFixed(6)} USDC</span>
+                                                <span className="font-bold font-mono">${stats.principal.toFixed(2)} USDC</span>
                                             </div>
                                             <div className="flex justify-between items-center pb-4 border-b">
                                                 <span className="text-gray-500">Total Accrued Yield</span>
-                                                <span className="font-bold text-green-600 font-mono">+${stats.yield.toFixed(6)} USDC</span>
+                                                <span className="font-bold text-green-600 font-mono">+${stats.yield.toFixed(4)} USDC</span>
                                             </div>
                                             <div className="flex justify-between items-center pb-4 border-b">
                                                 <span className="text-gray-500">Net Estimated APY</span>
@@ -628,7 +661,11 @@ export default function WorkerDashboard() {
 
                     </div>
                 )}
-                <WalletDashboardModal isOpen={isWalletOpen} onClose={() => setIsWalletOpen(false)} />
+                <WalletDashboardModal
+                    isOpen={isWalletOpen}
+                    onClose={() => setIsWalletOpen(false)}
+                    externalSavingsBalance={(Number(stats.totalSavings || 0)).toFixed(2)}
+                />
             </main>
         </div>
     );

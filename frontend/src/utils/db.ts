@@ -9,7 +9,9 @@ const DB_PATH = path.join(process.cwd(), 'src/data/users.json');
 const MEMOS_PATH = path.join(process.cwd(), 'src/data/memos.json');
 
 // Helper to check if we are in production/Vercel with DB setup
-const isProductionDB = !!process.env.POSTGRES_URL;
+// Logic: Only use Postgres if we are in PRODUCTION environment AND have the URL
+// This allows having the URL in .env locally without breaking local dev
+const isProductionDB = process.env.NODE_ENV === 'production' && !!process.env.POSTGRES_URL;
 
 export async function getUsers() {
     if (isProductionDB) {

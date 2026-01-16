@@ -21,7 +21,7 @@ const MODULES = {
         'vision-bbox': {
             title: 'Object Detection (Bounding Box)',
             desc: 'Draw boxes around objects of interest.',
-            components: ['campaign-info', 'upload-image', 'labels-creator', 'instructions-vision', 'verification-config', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'upload-image', 'labels-creator', 'instructions-vision', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         },
         'vision-class': {
             title: 'Image Classification',
@@ -31,53 +31,53 @@ const MODULES = {
         'vision-seg': {
             title: 'Semantic Segmentation',
             desc: 'Pixel-wise coloring of objects.',
-            components: ['campaign-info', 'upload-image', 'labels-creator', 'instructions-vision', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'upload-image', 'labels-creator', 'instructions-vision', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         }
     },
     'nlp': {
         'nlp-ner': {
             title: 'Named Entity Recognition (NER)',
             desc: 'Highlight people, places, and organizations.',
-            components: ['campaign-info', 'upload-text', 'entity-tags', 'instructions-simple', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'upload-text', 'entity-tags', 'instructions-simple', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         },
         'nlp-sentiment': {
             title: 'Sentiment Analysis',
             desc: 'Determine if text is positive, negative, or neutral.',
-            components: ['campaign-info', 'upload-text', 'sentiment-config', 'instructions-simple', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'upload-text', 'sentiment-config', 'instructions-simple', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         },
         'nlp-trans': {
             title: 'Translation / Localization',
             desc: 'Translate text between languages.',
-            components: ['campaign-info', 'upload-text', 'lang-pair', 'instructions-simple', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'upload-text', 'lang-pair', 'instructions-simple', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         },
         'nlp-text-class': {
             title: 'Text Classification',
             desc: 'Categorize text into custom topics.',
-            components: ['campaign-info', 'upload-text', 'classes-creator', 'instructions-simple', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'upload-text', 'classes-creator', 'instructions-simple', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         }
     },
     'audio': {
         'audio-transcribe': {
             title: 'Audio Transcription',
             desc: 'Convert speech to text.',
-            components: ['campaign-info', 'upload-audio', 'transcription-settings', 'instructions-simple', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'upload-audio', 'transcription-settings', 'instructions-simple', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         },
         'audio-collect': {
             title: 'Audio Data Collection',
             desc: 'Record users speaking specific phrases.',
-            components: ['campaign-info', 'prompt-text', 'audio-reqs', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'prompt-text', 'audio-reqs', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         }
     },
     'data-collection': {
         'data-enrich': {
             title: 'Web Scraping / Data Enrichment',
             desc: 'Find data from the web (URLs, contact info).',
-            components: ['campaign-info', 'upload-csv', 'fields-def', 'instructions-simple', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'upload-csv', 'fields-def', 'instructions-simple', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         },
         'survey': {
             title: 'Survey / Market Research',
             desc: 'Collect structured answers from users.',
-            components: ['campaign-info', 'survey-builder', 'payment-config'] as ComponentType[]
+            components: ['campaign-info', 'survey-builder', 'instructions-simple', 'difficulty-selector', 'verification-config', 'payment-config'] as ComponentType[]
         }
     }
 };
@@ -240,7 +240,8 @@ export default function CampaignCreatorPage() {
             diff: campaignConfig.difficulty,
             ver: campaignConfig.verificationStrategy,
             content: campaignConfig.datasetUrl || campaignConfig.textDatasetUrl || campaignConfig.audioDatasetUrl || campaignConfig.sourceDataUrl || "",
-            options: campaignConfig.classificationOptions || campaignConfig.labels || [],
+            options: campaignConfig.classificationOptions || campaignConfig.labels || campaignConfig.sentimentLabels || [],
+            questions: campaignConfig.questions || [], // Start with empty array if undefined
             timestamp: new Date().toISOString()
         });
 
@@ -251,11 +252,11 @@ export default function CampaignCreatorPage() {
 
         const subtotal = rewardPerTask * totalTasks * workersPerTask;
         const fee = subtotal * 0.05; // 5% platform fee
-        const totalValue = (subtotal + fee).toFixed(6); // Total including fee
-        const totalValueInAtoms = parseUnits(totalValue, 6);
+        const totalValue = (subtotal + fee).toFixed(18); // Total including fee (18 Decimals for Arc)
+        const totalValueInAtoms = parseUnits(totalValue, 18);
 
         // 2. Prepare Contract Arguments
-        const rewardInAtoms = BigInt(Math.round(rewardPerTask * 1e6));
+        const rewardInAtoms = parseUnits(rewardPerTask.toString(), 18); // Use parseUnits for 18 decimals safety
         const totalCount = BigInt(totalTasks);
         const deadline = BigInt(7) * BigInt(24) * BigInt(3600); // 7 days
         const metadataHash = metadata;

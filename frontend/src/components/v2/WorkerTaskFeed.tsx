@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     DollarSign,
     Clock,
@@ -15,6 +15,7 @@ import {
     Database,
     FileText
 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { WorkerTaskInterface, TaskData, TaskConfig } from './WorkerTaskInterface';
 import { useTasks } from '@/hooks/useTasks';
 import { useAccount, useWriteContract } from 'wagmi';
@@ -81,7 +82,11 @@ const MOCK_TASKS: TaskOpportunity[] = [
         difficulty: 'Easy',
         verification: 'Consensus',
         availableTasks: 5000,
-        tags: ['NLP', 'Fashion']
+        tags: ['NLP', 'Fashion'],
+        metadata: {
+            options: ['Positive', 'Neutral', 'Negative'],
+            desc: 'Analyze sentiment of reviews for a sustainable fashion brand.'
+        }
     },
     {
         id: 'task-103',
@@ -111,10 +116,45 @@ const MOCK_TASKS: TaskOpportunity[] = [
     }
 ];
 
-export const WorkerTaskFeed: React.FC = () => {
+interface WorkerTaskFeedProps {
+    onBack: () => void;
+}
+
+export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
     const { address: userAddress, isConnected } = useAccount();
-    const { allTasks: rawTasks, isLoading } = useTasks(undefined, userAddress);
+    const { allTasks: rawTasks, isLoading, refetch, markAsParticipated } = useTasks(undefined, userAddress);
     const [selectedTask, setSelectedTask] = useState<any>(null);
+    const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+
+    // Local blacklist for immediate feedback, persisted to localStorage to prevent regression on reload
+    const [recentlySubmitted, setRecentlySubmitted] = useState<Set<string>>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('arc_submitted_tasks');
+            if (saved) return new Set(JSON.parse(saved));
+        }
+        return new Set();
+    });
+
+    // Persist changes to localStorage
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('arc_submitted_tasks', JSON.stringify(Array.from(recentlySubmitted)));
+        }
+    }, [recentlySubmitted]);
+
+    // URL Synchronization Helper
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
+    const updateUrl = (taskId: string | number | null) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (taskId) {
+            params.set('taskId', taskId.toString());
+        } else {
+            params.delete('taskId');
+        }
+        router.replace(`?${params.toString()}`, { scroll: false });
+    };
 
     const availableTasks: TaskOpportunity[] = useMemo(() => {
         if (!rawTasks) {
@@ -128,7 +168,7 @@ export const WorkerTaskFeed: React.FC = () => {
         const participatedCampaigns = new Set<string>();
         if (currentUserLower) {
             rawTasks.forEach((t: any) => {
-                if (t.hasParticipated && t.metadataHash) {
+                if ((t.hasParticipated || recentlySubmitted.has(t.metadataHash) || recentlySubmitted.has(t.id.toString())) && t.metadataHash) {
                     participatedCampaigns.add(t.metadataHash);
                 }
             });
@@ -140,7 +180,9 @@ export const WorkerTaskFeed: React.FC = () => {
             const isAvailable = (t.status === 0 || t.status === 1) &&
                 Number(t.currentSubmissions) < Number(t.requiredSubmissions) &&
                 Number(t.deadline) > now &&
-                t.metadataHash;
+                t.metadataHash &&
+                !recentlySubmitted.has(t.id.toString()) &&
+                !t.hasParticipated; // Double check participation at task level
 
             if (isAvailable) {
                 if (!groups[t.metadataHash]) groups[t.metadataHash] = [];
@@ -180,16 +222,16 @@ export const WorkerTaskFeed: React.FC = () => {
                 description: metadata.desc || representative.description || "No description provided.",
                 rewardPerTask: parseFloat(representative.reward),
                 timePerTaskSec: metadata.timePerTaskSec || 45,
-                difficulty: metadata.difficulty || 'Medium',
+                difficulty: metadata.diff || metadata.difficulty || 'Medium',
                 verification: verificationLabel,
                 availableTasks: tasksInGroup.length,
                 tags: metadata.tags || [category.toUpperCase()],
-                metadata: metadata // Store for dynamic config
+                metadata: { ...metadata, metadataHash: representative.metadataHash } // Store for dynamic config & filtering
             });
         });
 
         return opportunities;
-    }, [rawTasks, userAddress]);
+    }, [rawTasks, userAddress, recentlySubmitted]);
 
     // Only show mock tasks if there are NO real tasks from the contract at all
     const tasksToShow = (rawTasks && rawTasks.length > 0) ? availableTasks : MOCK_TASKS;
@@ -218,6 +260,12 @@ export const WorkerTaskFeed: React.FC = () => {
                         { id: 2, name: 'Object B', color: '#f97316' }
                     ]
                 };
+            case 'vision-seg':
+                return {
+                    instruction,
+                    tools: ['poly', 'select'],
+                    classes: classes
+                };
             case 'image-classification':
             case 'vision-class':
             case 'object-verification':
@@ -228,9 +276,17 @@ export const WorkerTaskFeed: React.FC = () => {
             case 'text-classification':
             case 'nlp-sentiment':
             case 'language-detection':
+                // Provide default options if none exist for common types
+                const nlpClasses = classes.length > 0 ? classes : (
+                    moduleId === 'nlp-sentiment' ? [
+                        { id: 'Positive', name: 'Positive', color: '#10b981' },
+                        { id: 'Neutral', name: 'Neutral', color: '#6b7280' },
+                        { id: 'Negative', name: 'Negative', color: '#ef4444' }
+                    ] : []
+                );
                 return {
                     instruction,
-                    classes: classes,
+                    classes: nlpClasses,
                     hasTranslationInput: moduleId === 'nlp-trans' || moduleId === 'language-detection'
                 };
             default:
@@ -264,7 +320,15 @@ export const WorkerTaskFeed: React.FC = () => {
                     args: [BigInt(selectedTask.id), answer],
                 });
                 alert("Task submitted successfully via Wallet!");
+
+                // Optimistic Update
+                const taskHash = selectedTask.metadata?.metadataHash || selectedTask.id; // Fallback to ID
+                setRecentlySubmitted(prev => new Set(prev).add(taskHash).add(selectedTask.id));
+                markAsParticipated(selectedTask.id); // Force persistent removal
+                refetch(); // Trigger background refresh
+
                 setSelectedTask(null);
+                updateUrl(null);
                 return;
             }
 
@@ -308,7 +372,15 @@ export const WorkerTaskFeed: React.FC = () => {
                 }
 
                 alert("Task submitted successfully via Circle!");
+
+                // Optimistic Update
+                const taskHash = selectedTask.metadata?.metadataHash || selectedTask.id; // Fallback to ID
+                setRecentlySubmitted(prev => new Set(prev).add(taskHash).add(selectedTask.id));
+                markAsParticipated(selectedTask.id); // Force persistent removal
+                refetch(); // Trigger background refresh
+
                 setSelectedTask(null);
+                updateUrl(null);
             } else {
                 alert("Please connect a wallet or sign in to submit tasks.");
             }
@@ -333,15 +405,22 @@ export const WorkerTaskFeed: React.FC = () => {
             reward: `$${selectedTask.rewardPerTask || selectedTask.reward} USDC`,
             verificationType: selectedTask.verification,
             imageUrl: metadata.content || metadata.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
-            textContent: metadata.content || metadata.textContent || "Loading task content..."
+            textContent: metadata.content || metadata.textContent || "Loading task content...",
+            formData: metadata.questions || metadata.formData
         };
 
         return (
             <WorkerTaskInterface
                 task={taskData}
                 config={getTaskConfig(selectedTask)}
-                onExit={() => setSelectedTask(null)}
-                onSubmit={handleSubmission}
+                onExit={() => {
+                    setSelectedTask(null);
+                    updateUrl(null);
+                }}
+                onSubmit={(res) => {
+                    handleSubmission(res);
+                    updateUrl(null);
+                }}
             />
         );
     }
@@ -381,12 +460,18 @@ export const WorkerTaskFeed: React.FC = () => {
             {/* Header Section */}
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <button className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-gray-700 mb-2 transition">
+                    <button
+                        onClick={onBack}
+                        className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-gray-700 mb-2 transition"
+                    >
                         <ArrowLeft className="w-3 h-3" /> Back to Dashboard
                     </button>
-                    <h1 className="text-2xl font-bold text-gray-900">Task Market</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 flex gap-2 items-center">
+                        Task Market
+                        <span className="text-xs font-normal text-gray-400 border border-gray-200 px-2 py-0.5 rounded-full">{tasksToShow.length} active</span>
+                    </h1>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
                     <div className="relative">
                         <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
                         <input
@@ -395,13 +480,14 @@ export const WorkerTaskFeed: React.FC = () => {
                             className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none text-xs"
                         />
                     </div>
-                    <button className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium transition">
-                        <Filter className="w-3.5 h-3.5" />
-                        Filters
+
+                    <button
+                        onClick={onBack}
+                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition"
+                        title="Close Market"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
-                    <div className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center">
-                        Balance: $42.50
-                    </div>
                 </div>
             </div>
 
@@ -416,79 +502,114 @@ export const WorkerTaskFeed: React.FC = () => {
                 <div className="grid grid-cols-1 gap-3">
                     {tasksToShow.map((task) => {
                         const moduleInfo = MODULE_INFO[task.moduleId] || { title: 'Unknown Task', category: 'data' };
+                        const isExpanded = expandedTaskId === task.id;
 
                         return (
-                            <div key={task.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md transition-shadow group cursor-pointer relative overflow-hidden">
-                                {/* Thin Left Accent Bar */}
-                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${task.difficulty === 'Easy' ? 'bg-green-500' :
-                                    task.difficulty === 'Medium' ? 'bg-yellow-500' : 'bg-red-500'
-                                    }`}></div>
+                            <div key={task.id} className={`bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all group overflow-hidden ${isExpanded ? 'ring-2 ring-blue-500/20' : ''}`}>
 
-                                <div className="flex items-center justify-between ml-3 gap-6">
-                                    {/* Main Content Area - Wider */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{task.clientName}</span>
-                                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${getVerificationStyle(task.verification)} flex items-center gap-1 shadow-sm`}>
-                                                {task.verification === 'Instant Auto-Pay' ? <Zap className="w-2.5 h-2.5 fill-current" /> :
-                                                    task.verification === 'Consensus' ? <Users className="w-2.5 h-2.5" /> :
-                                                        <Clock className="w-2.5 h-2.5" />}
-                                                {task.verification}
-                                            </span>
-                                        </div>
+                                <div className="p-3 relative">
+                                    {/* Thin Left Accent Bar */}
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${task.difficulty === 'Easy' ? 'bg-green-500' :
+                                        task.difficulty === 'Medium' ? 'bg-yellow-500' : 'bg-red-500'
+                                        }`}></div>
 
-                                        <div className="flex flex-col gap-1">
-                                            <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{task.title}</h3>
-                                            <p className="text-gray-500 text-xs leading-relaxed">{task.description}</p>
-                                        </div>
-
-                                        {/* Tags Row - Compact */}
-                                        <div className="flex items-center gap-2 mt-2">
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getDifficultyColor(task.difficulty)}`}>
-                                                {task.difficulty}
-                                            </span>
-
-                                            {/* Dynamic Module Tag */}
-                                            <span className="flex items-center gap-1 text-gray-500 bg-gray-50 px-2 py-0.5 rounded text-[10px] font-medium border border-gray-100">
-                                                {getModuleIcon(moduleInfo.category)}
-                                                {moduleInfo.title}
-                                            </span>
-
-                                            <span className="flex items-center gap-1 text-gray-400 text-[10px]">
-                                                <Clock className="w-3 h-3" />
-                                                ~{task.timePerTaskSec}s
-                                            </span>
-
-                                            <span className="flex items-center gap-1 text-gray-400 text-[10px]">
-                                                <Target className="w-3 h-3" />
-                                                {task.availableTasks} left
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Right Side Actions - Horizontal Layout for compact height */}
-                                    <div className="flex items-center gap-4 border-l border-gray-100 pl-4">
-                                        <div className="text-right min-w-[80px]">
-                                            <div className="text-xl font-bold text-gray-900">
-                                                <span className="text-sm text-gray-400 font-medium">$</span>{task.rewardPerTask.toFixed(2)}
+                                    <div className="flex items-center justify-between ml-3 gap-6">
+                                        {/* Main Content Area - Wider */}
+                                        <div className="flex-1 min-w-0" onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{task.clientName}</span>
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${getVerificationStyle(task.verification)} flex items-center gap-1 shadow-sm`}>
+                                                    {task.verification === 'Instant Auto-Pay' ? <Zap className="w-2.5 h-2.5 fill-current" /> :
+                                                        task.verification === 'Consensus' ? <Users className="w-2.5 h-2.5" /> :
+                                                            <Clock className="w-2.5 h-2.5" />}
+                                                    {task.verification}
+                                                </span>
                                             </div>
-                                            <div className="text-[10px] text-gray-400 uppercase">per task</div>
+
+                                            <div className="flex flex-col gap-1">
+                                                <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{task.title}</h3>
+                                                {!isExpanded && <p className="text-gray-500 text-xs leading-relaxed truncate">{task.description}</p>}
+                                            </div>
+
+                                            {/* Tags Row - Compact */}
+                                            <div className="flex items-center gap-2 mt-2">
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getDifficultyColor(task.difficulty)}`}>
+                                                    {task.difficulty}
+                                                </span>
+
+                                                {/* Dynamic Module Tag */}
+                                                <span className="flex items-center gap-1 text-gray-500 bg-gray-50 px-2 py-0.5 rounded text-[10px] font-medium border border-gray-100">
+                                                    {getModuleIcon(moduleInfo.category)}
+                                                    {moduleInfo.title}
+                                                </span>
+
+                                                <span className="flex items-center gap-1 text-gray-400 text-[10px]">
+                                                    <Clock className="w-3 h-3" />
+                                                    ~{task.timePerTaskSec}s
+                                                </span>
+
+                                                <span className="flex items-center gap-1 text-gray-400 text-[10px]">
+                                                    <Target className="w-3 h-3" />
+                                                    {task.availableTasks} left
+                                                </span>
+                                            </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2">
-                                            <button className="h-9 w-9 border border-gray-200 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition flex items-center justify-center" title="Details">
-                                                <Info className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => setSelectedTask(task)}
-                                                className="bg-black text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-gray-800 transition shadow-sm flex items-center justify-center gap-2 h-9"
-                                            >
-                                                <Zap className="w-3.5 h-3.5" />
-                                                Start
-                                            </button>
+                                        {/* Right Side Actions - Horizontal Layout for compact height */}
+                                        <div className="flex items-center gap-4 border-l border-gray-100 pl-4">
+                                            <div className="text-right min-w-[80px]">
+                                                <div className="text-xl font-bold text-gray-900">
+                                                    <span className="text-sm text-gray-400 font-medium">$</span>{task.rewardPerTask.toFixed(2)}
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 uppercase">per task</div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    className={`h-9 w-9 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition flex items-center justify-center ${isExpanded ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white'}`}
+                                                    title="Details"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setExpandedTaskId(isExpanded ? null : task.id);
+                                                    }}
+                                                >
+                                                    <Info className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedTask(task);
+                                                        updateUrl(task.id);
+                                                    }}
+                                                    className="bg-black text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-gray-800 transition shadow-sm flex items-center justify-center gap-2 h-9"
+                                                >
+                                                    <Zap className="w-3.5 h-3.5" />
+                                                    Start
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Expanded Details Section */}
+                                {isExpanded && (
+                                    <div className="bg-gray-50 px-4 py-3 border-t border-gray-100 ml-1">
+                                        <div className="flex gap-4">
+                                            <div className="flex-1">
+                                                <p className="text-xs font-bold text-gray-500 uppercase mb-1">Full Description</p>
+                                                <p className="text-sm text-gray-700 leading-relaxed mb-3">{task.description}</p>
+
+                                                <div className="flex gap-2 flex-wrap">
+                                                    {task.tags?.map((tag: string, i: number) => (
+                                                        <span key={i} className="px-2 py-1 bg-white border border-gray-200 rounded text-[10px] text-gray-500 font-mono">
+                                                            #{tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}

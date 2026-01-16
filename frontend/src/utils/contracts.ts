@@ -22,6 +22,12 @@ export const CONTRACTS = {
     MockYieldVault: {
         address: "0xe0e2f4eA038B9dFdfb92B2761B752FBbE0cF292e" as `0x${string}`, // Arc Testnet (LATEST VAULT)
         abi: MockYieldVaultArtifact.abi,
+    },
+    USDC: {
+        address: "0x3600000000000000000000000000000000000000" as `0x${string}`, // Arc Testnet Canonical USDC (ERC-20 Interface for Native Gas)
+        abi: [
+            { "inputs": [{ "internalType": "address", "name": "account", "type": "address" }], "name": "balanceOf", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }
+        ]
     }
 } as const;
 

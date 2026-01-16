@@ -150,6 +150,19 @@ export const AgencyDashboard: React.FC = () => {
         return Object.values(groups);
     }, [agencyTasks]);
 
+    // Calculate Total Spend (Committed Funds for non-cancelled tasks)
+    const totalSpend = useMemo(() => {
+        return agencyTasks.reduce((acc: number, t: any) => {
+            // Only count if not cancelled (Status 4 is Cancelled)
+            if (t.status !== 4) {
+                const reward = parseFloat(t.reward || '0');
+                const submissions = Number(t.requiredSubmissions || 1);
+                return acc + (reward * submissions);
+            }
+            return acc;
+        }, 0);
+    }, [agencyTasks]);
+
     // Pending reviews (Status 1)
     const pendingReviews = useMemo(() => {
         return agencyTasks.filter((t: any) => t.status === 1);
@@ -389,9 +402,9 @@ export const AgencyDashboard: React.FC = () => {
                             <div className="grid grid-cols-4 gap-6">
                                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                                     <p className="text-xs font-bold text-gray-500 uppercase">Total Spend</p>
-                                    <h3 className="text-2xl font-bold text-gray-900 mt-2">$2,450.00</h3>
+                                    <h3 className="text-2xl font-bold text-gray-900 mt-2">${totalSpend.toFixed(2)}</h3>
                                     <div className="flex items-center mt-2 text-xs text-green-600 font-medium">
-                                        <TrendingUp className="w-3 h-3 mr-1" /> +12% this week
+                                        <TrendingUp className="w-3 h-3 mr-1" /> Lifetime
                                     </div>
                                 </div>
                                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">

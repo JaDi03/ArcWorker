@@ -129,8 +129,8 @@ export function LiveYieldCounter({ address }: LiveYieldCounterProps) {
 
     // Visual Interpolation
     const tick = (now % 10000) / 10000;
-    const totalDisplay = stats.total > 0 ? (stats.total + (stats.total * 0.05 / 31536000 * (now % 60000) / 1000)).toFixed(6) : "0.000000";
-    const yieldDisplay = stats.yield > 0 ? (stats.yield + (stats.total * 0.05 / 31536000 * (now % 60000) / 1000)).toFixed(6) : "0.000000";
+    const totalDisplay = stats.total > 0 ? (stats.total + (stats.total * 0.05 / 31536000 * (now % 60000) / 1000)).toFixed(4) : "0.0000";
+    const yieldDisplay = stats.yield > 0 ? (stats.yield + (stats.total * 0.05 / 31536000 * (now % 60000) / 1000)).toFixed(4) : "0.0000";
 
     const [userRole, setUserRole] = useState<'worker' | 'agency' | 'developer' | null>(null);
 

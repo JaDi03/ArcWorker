@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useReadContract, useReadContracts } from 'wagmi';
 import { CONTRACTS } from '@/utils/contracts';
-import { formatEther } from 'viem';
+import { formatEther, formatUnits } from 'viem';
 
 /**
  * Hook optimized for Agency/Business Dashboard.
@@ -66,7 +66,7 @@ export function useBusinessTasks(address?: string) {
                 return {
                     id: Number(t[0]),
                     agency: t[1],
-                    reward: (Number(t[2]) / 1e6).toFixed(2), // USDC (6 decimals)
+                    reward: (Number(formatUnits(BigInt(t[2] || 0), 18))).toFixed(2), // USDC (18 decimals native)
                     rewardRaw: t[2],
                     deposit: t[3],
                     deadline: t[4],

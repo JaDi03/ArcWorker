@@ -1,9 +1,16 @@
 import React, { useRef, useState } from 'react';
 import {
     ImagePlus, FileText, Headphones, Table,
-    Globe, UploadCloud, CheckCircle
+    Globe, UploadCloud, CheckCircle, Trash2
 } from 'lucide-react';
 import { ComponentType, CampaignConfig } from './types';
+import {
+    InstructionsStep,
+    UploadImageStep,
+    UploadTextStep,
+    UploadAudioStep,
+    UploadCsvStep
+} from './DynamicFormSteps';
 
 interface DynamicFormProps {
     components: ComponentType[];
@@ -22,84 +29,6 @@ const Wrapper = ({ title, children, index }: { title: string, children: React.Re
 export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components, config, onChange }) => {
 
 
-    const renderUploadImage = (index: number) => {
-        const fileInputRef = useRef<HTMLInputElement>(null);
-        const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
-        const [fileName, setFileName] = useState<string | null>(null);
-
-        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0];
-            if (file) {
-                setFileName(file.name);
-                setUploadStatus('uploading');
-
-                const data = new FormData();
-                data.append('file', file);
-
-                fetch('/api/upload', {
-                    method: 'POST',
-                    body: data
-                })
-                    .then(res => res.json())
-                    .then(result => {
-                        if (result.url) {
-                            setUploadStatus('success');
-                            onChange({ datasetUrl: result.url });
-                        } else {
-                            throw new Error("No URL returned");
-                        }
-                    })
-                    .catch(err => {
-                        console.error("Upload failed:", err);
-                        setUploadStatus('idle');
-                        alert("Image upload failed. Please try again.");
-                    });
-            }
-        };
-
-        return (
-            <Wrapper title="Dataset (Images)" index={index}>
-                <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-10 text-center transition cursor-pointer group ${uploadStatus === 'success' ? 'border-green-500 bg-green-50/30' : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
-                        }`}
-                >
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                        accept=".zip,image/*"
-                        onChange={handleFileChange}
-                    />
-
-                    {uploadStatus === 'success' ? (
-                        <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3 animate-in zoom-in" />
-                    ) : uploadStatus === 'uploading' ? (
-                        <UploadCloud className="w-12 h-12 text-blue-500 mx-auto mb-3 animate-bounce" />
-                    ) : (
-                        <ImagePlus className="w-12 h-12 text-gray-400 mx-auto group-hover:text-blue-500 mb-3" />
-                    )}
-
-                    <p className={`text-sm font-bold ${uploadStatus === 'success' ? 'text-green-700' : 'text-gray-700'}`}>
-                        {uploadStatus === 'success' ? `Ready: ${fileName}` : uploadStatus === 'uploading' ? 'Analyzing file...' : 'Upload Images (ZIP) or Folder'}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">Supports JPG, PNG, WEBP, ZIP</p>
-
-                    <div className="mt-6 pt-6 border-t border-gray-100 flex items-center gap-3">
-                        <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">or</span>
-                        <input
-                            type="text"
-                            className="flex-1 bg-gray-50 border-none rounded-lg px-3 py-2 text-xs font-semibold text-gray-600 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                            placeholder="Connect AWS S3 Bucket URL"
-                            value={config.datasetUrl || ''}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ datasetUrl: e.target.value })}
-                        />
-                    </div>
-                </div>
-            </Wrapper>
-        );
-    };
 
     const renderCampaignInfo = (index: number) => (
         <Wrapper title="Campaign Information" index={index}>
@@ -135,170 +64,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
     );
 
 
-    const renderUploadText = (index: number) => {
-        const fileInputRef = useRef<HTMLInputElement>(null);
-        const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
-        const [fileName, setFileName] = useState<string | null>(null);
 
-        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0];
-            if (file) {
-                setFileName(file.name);
-                setUploadStatus('uploading');
 
-                const data = new FormData();
-                data.append('file', file);
-
-                fetch('/api/upload', {
-                    method: 'POST',
-                    body: data
-                })
-                    .then(res => res.json())
-                    .then(result => {
-                        if (result.url) {
-                            setUploadStatus('success');
-                            onChange({ textDatasetUrl: result.url });
-                        } else {
-                            throw new Error("No URL returned");
-                        }
-                    })
-                    .catch(err => {
-                        console.error("Text upload failed:", err);
-                        setUploadStatus('idle');
-                    });
-            }
-        };
-
-        return (
-            <Wrapper title="Text Dataset" index={index}>
-                <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-8 text-center transition cursor-pointer group ${uploadStatus === 'success' ? 'border-blue-500 bg-blue-50/30' : 'border-gray-300 hover:border-blue-500'
-                        }`}
-                >
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".jsonl,.csv,.txt" onChange={handleFileChange} />
-                    {uploadStatus === 'success' ? (
-                        <CheckCircle className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-                    ) : (
-                        <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2 group-hover:text-blue-500" />
-                    )}
-                    <p className="text-sm font-bold text-gray-700">
-                        {uploadStatus === 'success' ? fileName : 'Upload JSONL, CSV or TXT files'}
-                    </p>
-                </div>
-            </Wrapper>
-        );
-    };
-
-    const renderUploadAudio = (index: number) => {
-        const fileInputRef = useRef<HTMLInputElement>(null);
-        const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
-        const [fileName, setFileName] = useState<string | null>(null);
-
-        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0];
-            if (file) {
-                setFileName(file.name);
-                setUploadStatus('uploading');
-
-                const data = new FormData();
-                data.append('file', file);
-
-                fetch('/api/upload', {
-                    method: 'POST',
-                    body: data
-                })
-                    .then(res => res.json())
-                    .then(result => {
-                        if (result.url) {
-                            setUploadStatus('success');
-                            onChange({ audioDatasetUrl: result.url });
-                        } else {
-                            throw new Error("No URL returned");
-                        }
-                    })
-                    .catch(err => {
-                        console.error("Audio upload failed:", err);
-                        setUploadStatus('idle');
-                    });
-            }
-        };
-
-        return (
-            <Wrapper title="Audio Source" index={index}>
-                <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-8 text-center transition cursor-pointer group ${uploadStatus === 'success' ? 'border-purple-500 bg-purple-50/30' : 'border-gray-300 hover:border-purple-500'
-                        }`}
-                >
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".mp3,.wav,.ogg" onChange={handleFileChange} />
-                    {uploadStatus === 'success' ? (
-                        <CheckCircle className="w-8 h-8 text-purple-500 mx-auto mb-2" />
-                    ) : (
-                        <Headphones className="w-8 h-8 text-gray-400 mx-auto mb-2 group-hover:text-purple-500" />
-                    )}
-                    <p className="text-sm font-bold text-gray-700">
-                        {uploadStatus === 'success' ? fileName : 'Upload MP3/WAV files'}
-                    </p>
-                </div>
-            </Wrapper>
-        );
-    };
-
-    const renderUploadCsv = (index: number) => {
-        const fileInputRef = useRef<HTMLInputElement>(null);
-        const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
-        const [fileName, setFileName] = useState<string | null>(null);
-
-        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0];
-            if (file) {
-                setFileName(file.name);
-                setUploadStatus('uploading');
-
-                const data = new FormData();
-                data.append('file', file);
-
-                fetch('/api/upload', {
-                    method: 'POST',
-                    body: data
-                })
-                    .then(res => res.json())
-                    .then(result => {
-                        if (result.url) {
-                            setUploadStatus('success');
-                            onChange({ sourceDataUrl: result.url });
-                        } else {
-                            throw new Error("No URL returned");
-                        }
-                    })
-                    .catch(err => {
-                        console.error("CSV upload failed:", err);
-                        setUploadStatus('idle');
-                    });
-            }
-        };
-
-        return (
-            <Wrapper title="Source Data" index={index}>
-                <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-8 text-center transition cursor-pointer group ${uploadStatus === 'success' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-300 hover:border-orange-500'
-                        }`}
-                >
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleFileChange} />
-                    {uploadStatus === 'success' ? (
-                        <CheckCircle className="w-8 h-8 text-orange-500 mx-auto mb-2" />
-                    ) : (
-                        <Table className="w-8 h-8 text-gray-400 mx-auto mb-2 group-hover:text-orange-500" />
-                    )}
-                    <p className="text-sm font-bold text-gray-700">
-                        {uploadStatus === 'success' ? fileName : "Upload CSV with 'source' column"}
-                    </p>
-                </div>
-            </Wrapper>
-        );
-    };
 
     const renderLabelsCreator = (index: number) => (
         <Wrapper title="Taxonomy (Classes)" index={index}>
@@ -307,7 +74,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
                     <input
                         type="text"
                         placeholder="Add labels (comma separated)..."
-                        className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                        className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-bold text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                         value={config.labels?.join(', ') || ''}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ labels: e.target.value.split(',').map((s: string) => s.trim()).filter((s: string) => s) })}
                     />
@@ -342,7 +109,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
 
     const renderClassesCreator = (index: number) => (
         <Wrapper title="Classification Options" index={index}>
-            <p className="text-xs text-gray-500 mb-2">Workers must choose ONE of these:</p>
+            <p className="text-xs font-bold text-gray-700 mb-2">Workers must choose ONE of these:</p>
             <div className="space-y-2">
                 {config.classificationOptions?.map((option: string, i: number) => (
                     <div key={i} className="flex gap-2">
@@ -425,42 +192,54 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
         </Wrapper>
     );
 
-    const renderSentimentConfig = (index: number) => (
-        <Wrapper title="Sentiment Labels" index={index}>
-            <div className="flex gap-4">
-                {(config.sentimentLabels || ['Positive', 'Negative', 'Neutral']).map((label: string) => (
-                    <div key={label} className="flex items-center gap-2 p-3 border rounded-lg bg-gray-50 flex-1 justify-between">
-                        <span className="text-sm font-medium text-gray-700">{label}</span>
-                        <input
-                            type="checkbox"
-                            checked={config.sentimentLabels?.includes(label) || false}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                const currentLabels = new Set(config.sentimentLabels || []);
-                                if (e.target.checked) {
-                                    currentLabels.add(label);
-                                } else {
-                                    currentLabels.delete(label);
-                                }
-                                onChange({ sentimentLabels: Array.from(currentLabels) });
-                            }}
-                            className="rounded text-blue-600 focus:ring-blue-500"
-                        />
-                    </div>
-                ))}
-            </div>
-            <button
-                className="text-blue-600 text-sm font-medium mt-3 hover:underline"
-                onClick={() => {
-                    const newLabel = prompt("Enter new sentiment label:");
-                    if (newLabel && !config.sentimentLabels?.includes(newLabel)) {
-                        onChange({ sentimentLabels: [...(config.sentimentLabels || []), newLabel] });
-                    }
-                }}
-            >
-                + Add Custom Label
-            </button>
-        </Wrapper>
-    );
+    const renderSentimentConfig = (index: number) => {
+        const defaultOptions = ['Positive', 'Negative', 'Neutral'];
+        // Combine defaults with any custom labels that are NOT in defaults
+        const currentLabels = config.sentimentLabels || [];
+        const customLabels = currentLabels.filter(l => !defaultOptions.includes(l));
+        const allOptions = [...defaultOptions, ...customLabels];
+
+        return (
+            <Wrapper title="Sentiment Labels" index={index}>
+                <div className="flex gap-4 flex-wrap">
+                    {allOptions.map((label: string) => {
+                        const isSelected = config.sentimentLabels ? config.sentimentLabels.includes(label) : true; // Default to all selected if undefined (initial state)
+
+                        return (
+                            <div key={label} className={`flex items-center gap-2 p-3 border rounded-lg flex-1 justify-between min-w-[120px] transition ${isSelected ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                                <span className={`text-sm font-medium ${isSelected ? 'text-blue-900' : 'text-gray-500'}`}>{label}</span>
+                                <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                        const currentSet = new Set(config.sentimentLabels || allOptions); // If undefined, start with ALL selected
+                                        if (e.target.checked) {
+                                            currentSet.add(label);
+                                        } else {
+                                            currentSet.delete(label);
+                                        }
+                                        onChange({ sentimentLabels: Array.from(currentSet) });
+                                    }}
+                                    className="rounded text-blue-600 focus:ring-blue-500"
+                                />
+                            </div>
+                        );
+                    })}
+                </div>
+                <button
+                    className="text-blue-600 text-sm font-medium mt-3 hover:underline"
+                    onClick={() => {
+                        const newLabel = prompt("Enter new sentiment label:");
+                        if (newLabel && !allOptions.includes(newLabel)) {
+                            onChange({ sentimentLabels: [...(config.sentimentLabels || allOptions), newLabel] });
+                        }
+                    }}
+                >
+                    + Add Custom Label
+                </button>
+            </Wrapper>
+        );
+    };
 
     const renderTranscriptionSettings = (index: number) => (
         <Wrapper title="Transcription Rules" index={index}>
@@ -583,30 +362,108 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
 
     const renderSurveyBuilder = (index: number) => (
         <Wrapper title="Survey Questions" index={index}>
-            <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition cursor-pointer">
-                <span className="text-lg font-medium">+ Add Question</span>
-                <span className="text-xs mt-1">Multiple Choice, Text, Rating, etc.</span>
+            <div className="space-y-4">
+                {/* List of Questions */}
+                {config.questions?.map((q: any, i: number) => (
+                    <div key={i} className="p-4 border rounded-lg bg-gray-50 border-gray-200 relative group transition hover:border-blue-200">
+                        <div className="flex gap-3 mb-3">
+                            <div className="bg-blue-100 text-blue-700 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
+                                {i + 1}
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Enter your question here..."
+                                className="flex-1 bg-transparent border-b border-gray-300 focus:border-blue-500 outline-none pb-1 font-medium text-gray-900 placeholder-gray-400"
+                                value={q.question || ''}
+                                onChange={(e) => {
+                                    const newQuestions = [...(config.questions || [])];
+                                    newQuestions[i] = { ...newQuestions[i], question: e.target.value };
+                                    onChange({ questions: newQuestions });
+                                }}
+                            />
+                            <button
+                                className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                                onClick={() => onChange({ questions: config.questions?.filter((_: any, idx: number) => idx !== i) })}
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="pl-9 grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Answer Type</label>
+                                <select
+                                    className="w-full text-sm border-gray-300 rounded-md p-2 bg-white"
+                                    value={q.type || 'text'}
+                                    onChange={(e) => {
+                                        const newQuestions = [...(config.questions || [])];
+                                        newQuestions[i] = { ...newQuestions[i], type: e.target.value as 'text' | 'multiple_choice' | 'checkbox' | 'rating' };
+                                        onChange({ questions: newQuestions });
+                                    }}
+                                >
+                                    <option value="text">Text Input</option>
+                                    <option value="multiple_choice">Multiple Choice</option>
+                                    <option value="checkbox">Checkbox (Multiple Select)</option>
+                                    <option value="rating">Star Rating (1-5)</option>
+                                </select>
+                            </div>
+                            <div className="flex items-center pt-5">
+                                <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+                                    <input
+                                        type="checkbox"
+                                        checked={q.required !== false}
+                                        onChange={(e) => {
+                                            const newQuestions = [...(config.questions || [])];
+                                            newQuestions[i] = { ...newQuestions[i], required: e.target.checked };
+                                            onChange({ questions: newQuestions });
+                                        }}
+                                        className="rounded text-blue-600 focus:ring-blue-500"
+                                    />
+                                    Required Question
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Options for Multiple Choice */}
+                        {['multiple_choice', 'checkbox'].includes(q.type) && (
+                            <div className="pl-9 mt-3">
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-2">Options (Comma separated)</label>
+                                <input
+                                    type="text"
+                                    placeholder="Option A, Option B, Option C..."
+                                    className="w-full text-sm border-gray-300 rounded-md p-2"
+                                    value={q.options?.join(', ') || ''}
+                                    onChange={(e) => {
+                                        const newQuestions = [...(config.questions || [])];
+                                        newQuestions[i] = {
+                                            ...newQuestions[i],
+                                            options: e.target.value.split(',').map((s: string) => s.trim())
+                                        };
+                                        onChange({ questions: newQuestions });
+                                    }}
+                                />
+                            </div>
+                        )}
+                    </div>
+                ))}
+
+                {/* Add Button */}
+                <button
+                    onClick={() => onChange({
+                        questions: [
+                            ...(config.questions || []),
+                            { question: '', type: 'text', required: true }
+                        ]
+                    })}
+                    className="w-full py-4 border-2 border-dashed border-gray-200 rounded-xl text-gray-500 font-medium hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition flex flex-col items-center justify-center gap-2"
+                >
+                    <span className="text-2xl font-light">+</span>
+                    <span>Add Another Question</span>
+                </button>
             </div>
         </Wrapper>
     );
 
-    const renderInstructions = (index: number) => (
-        <Wrapper title="Instructions & Visual Guide" index={index}>
-            <div className="flex flex-col md:flex-row gap-4 h-48">
-                <div className="md:w-1/2">
-                    <textarea
-                        className="w-full h-full border border-gray-300 rounded-md p-3 text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                        placeholder="Explain how tight the boxes should be..."
-                        value={config.instructions || ''}
-                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange({ instructions: e.target.value })}
-                    ></textarea>
-                </div>
-                <div className="md:w-1/2 bg-gray-100 rounded-md border border-gray-200 flex items-center justify-center text-gray-400 text-sm">
-                    Preview of Annotation Tool
-                </div>
-            </div>
-        </Wrapper>
-    );
 
     const renderDifficultySelector = (index: number) => (
         <Wrapper title="Difficulty Level" index={index}>
@@ -639,36 +496,40 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
         <Wrapper title="Budget & Launch Limit" index={index}>
             <div className="flex gap-6">
                 <div className="flex-1">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Reward per Task</label>
+                    <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-2">Reward per Task</label>
                     <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-gray-400 font-medium">$</span>
+                        <span className="absolute left-3 top-2.5 text-gray-500 font-bold">$</span>
                         <input
                             type="number"
-                            step="0.01"
-                            className="w-full border border-gray-300 rounded-md pl-7 pr-3 py-2 text-gray-900 font-mono font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            value={config.rewardPerTask || 0.15}
+                            step="0.0001"
+                            placeholder="0.15"
+                            className="w-full border border-gray-300 rounded-md pl-7 pr-3 py-2 text-gray-900 font-mono font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={config.rewardPerTask || ''}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ rewardPerTask: parseFloat(e.target.value) })}
                         />
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">Recommended: $0.10 - $0.30</p>
+                    <p className="text-xs text-gray-500 mt-1 font-medium">Set your price (Min $0.01)</p>
                 </div>
 
                 <div className="flex-1">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Total Tasks</label>
+                    <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-2">Total Tasks</label>
                     <input
                         type="number"
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 font-mono font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 font-mono font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none"
                         value={config.totalTasks || 10}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ totalTasks: parseInt(e.target.value) })}
                     />
                 </div>
 
                 <div className="flex-1">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Workers / Task</label>
+                    <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
+                        Workers / Task
+                        {config.verificationStrategy === 'Manual Review' && <span className="text-[9px] text-orange-600 ml-2 normal-case font-normal">(Locked for Manual Review)</span>}
+                    </label>
                     <input
                         type="number"
                         min="1"
-                        className={`w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 font-mono font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none ${config.verificationStrategy === 'Manual Review' ? 'bg-gray-50 opacity-50' : ''}`}
+                        className={`w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 font-mono font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none ${config.verificationStrategy === 'Manual Review' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
                         value={config.workersPerTask || 1}
                         disabled={config.verificationStrategy === 'Manual Review'}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ workersPerTask: parseInt(e.target.value) })}
@@ -700,8 +561,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
                         className="mt-1 text-blue-600 focus:ring-blue-500"
                     />
                     <div>
-                        <span className="block text-sm font-semibold text-gray-900">Consensus (Auto)</span>
-                        <span className="block text-xs text-gray-500 mt-1">Multiple workers confirm the same task for quality.</span>
+                        <span className="block text-sm font-bold text-gray-900">Consensus (Auto)</span>
+                        <span className="block text-xs text-gray-600 mt-1 font-medium">Multiple workers confirm the same task for quality.</span>
                     </div>
                 </label>
 
@@ -714,8 +575,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
                         className="mt-1 text-blue-600 focus:ring-blue-500"
                     />
                     <div>
-                        <span className="block text-sm font-semibold text-gray-900">Manual Review</span>
-                        <span className="block text-xs text-gray-500 mt-1">You verify each submission manually from the dashboard.</span>
+                        <span className="block text-sm font-bold text-gray-900">Manual Review</span>
+                        <span className="block text-xs text-gray-600 mt-1 font-medium">You verify each submission manually from the dashboard.</span>
                     </div>
                 </label>
 
@@ -728,23 +589,23 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
                         className="mt-1 text-blue-600 focus:ring-blue-500"
                     />
                     <div>
-                        <span className="block text-sm font-semibold text-gray-900">Golden Set (Auto)</span>
-                        <span className="block text-xs text-gray-500 mt-1">Instant approval if worker matches ground truth answer.</span>
+                        <span className="block text-sm font-bold text-gray-900">Golden Set (Auto)</span>
+                        <span className="block text-xs text-gray-600 mt-1 font-medium">Instant approval if worker matches ground truth answer.</span>
                     </div>
                 </label>
             </div>
 
             {config.verificationStrategy === 'Golden Set' && (
                 <div className="p-4 bg-amber-50 border border-amber-100 rounded-lg animate-fade-in">
-                    <label className="block text-xs font-bold text-amber-700 uppercase tracking-wider mb-2">Ground Truth Answer</label>
+                    <label className="block text-xs font-black text-amber-800 uppercase tracking-wider mb-2">Ground Truth Answer</label>
                     <input
                         type="text"
                         placeholder="Enter the correct answer for auto-verification..."
-                        className="w-full bg-white border border-amber-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                        className="w-full bg-white border border-amber-200 rounded px-3 py-2 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-amber-500 outline-none"
                         value={config.correctAnswer || ''}
                         onChange={(e) => onChange({ correctAnswer: e.target.value })}
                     />
-                    <p className="text-[10px] text-amber-600 mt-2 font-medium italic">
+                    <p className="text-[10px] text-amber-700 mt-2 font-bold italic">
                         * Workers who submit this exact text will be approved and paid immediately by the protocol.
                     </p>
                 </div>
@@ -765,13 +626,13 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
             case 'campaign-info':
                 return renderCampaignInfo(index);
             case 'upload-image':
-                return renderUploadImage(index);
+                return <UploadImageStep key={index} index={index} config={config} onChange={onChange} />;
             case 'upload-text':
-                return renderUploadText(index);
+                return <UploadTextStep key={index} index={index} config={config} onChange={onChange} />;
             case 'upload-audio':
-                return renderUploadAudio(index);
+                return <UploadAudioStep key={index} index={index} config={config} onChange={onChange} />;
             case 'upload-csv':
-                return renderUploadCsv(index);
+                return <UploadCsvStep key={index} index={index} config={config} onChange={onChange} />;
             case 'labels-creator':
                 return renderLabelsCreator(index);
             case 'classes-creator':
@@ -794,7 +655,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
                 return renderSurveyBuilder(index);
             case 'instructions-simple':
             case 'instructions-vision':
-                return renderInstructions(index);
+                return <InstructionsStep key={index} index={index} config={config} onChange={onChange} />;
             case 'difficulty-selector':
                 return renderDifficultySelector(index);
             case 'payment-config':

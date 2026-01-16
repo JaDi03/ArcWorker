@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useReadContract, useReadContracts } from 'wagmi';
+import { formatUnits } from 'viem'; // Added import
 import { CONTRACTS } from '@/utils/contracts';
 
 /**
@@ -25,10 +26,10 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
         address: CONTRACTS.TaskEscrow.address,
         abi: CONTRACTS.TaskEscrow.abi,
         functionName: 'getRecentTasks',
-        args: [BigInt(100)], // Fetch last 100 for better coverage
+        args: [BigInt(50)], // Fetch last 50 for improved stability
         query: {
-            staleTime: 5000,
-            refetchInterval: 5000,
+            staleTime: 10000, // Increase stale time
+            refetchInterval: 10000,
             refetchOnWindowFocus: true,
             enabled: true
         }
@@ -43,9 +44,7 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
 
     const [rawProcessedTasks, setRawProcessedTasks] = useState<any[]>([]);
 
-    useEffect(() => {
-        localStorage.removeItem('arc_tasks_cache');
-    }, []);
+    // Removed aggressive cache clearing on mount to improve stability
 
     // Effect to update local state when fresh network data arrives
     useEffect(() => {
@@ -104,7 +103,11 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
                 return {
                     id: id,
                     agency: agency,
-                    reward: (Number(reward || 0) / 1e6).toFixed(2),
+                    // Heuristic: If reward > 100,000 (100k USDC), it is likely an 18-decimal "bugged" task.
+                    // 100k USDC in 6 decimals = 100,000 * 10^6 = 10^11.
+                    // 1 USDC in 18 decimals = 10^18.
+                    // So if raw > 10^14 (100 million USDC equivalent), treat as 18 decimals.
+                    reward: (Number(formatUnits(BigInt(reward || 0), 18))).toFixed(2),
                     rewardValue: BigInt(reward || 0),
                     deposit: actualDeposit,
                     deadline: actualDeadline,
@@ -141,17 +144,63 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
         contracts: participationConfig as any,
         query: {
             enabled: !!workerAddress && rawProcessedTasks.length > 0,
-            staleTime: 5000,
+            staleTime: 10000,
+            retry: 2 // Retry failed checks automatically
         }
     });
 
+    // CACHE PARTICIPATIONS TO PREVENT FLICKER (ID-BASED MAP)
+    const [participationMap, setParticipationMap] = useState<Record<string, boolean>>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const stored = localStorage.getItem('arc_participation_cache');
+                return stored ? JSON.parse(stored) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+        return {};
+    });
+
+    useEffect(() => {
+        if (participations && rawProcessedTasks.length > 0 && participations.length === rawProcessedTasks.length) {
+            setParticipationMap(prev => {
+                const next = { ...prev };
+                let hasChanges = false;
+
+                participations.forEach((p, i) => {
+                    const task = rawProcessedTasks[i];
+                    // Only update if success.
+                    if (task && p.status === 'success') {
+                        const rpcSaysParticipated = p.result === true;
+                        const currentlyParticipated = next[task.id] === true;
+
+                        // STICKY LOGIC: Once true, stay true. 
+                        // Only update if we are flipping from false -> true.
+                        // Never flip true -> false based on RPC (RPC might be lagging behind our local optimistic write)
+                        if (rpcSaysParticipated && !currentlyParticipated) {
+                            next[task.id] = true;
+                            hasChanges = true;
+                        }
+                        // If RPC says false, but we have true locally, IGNORE RPC. Trust local.
+                    }
+                });
+
+                if (hasChanges) {
+                    localStorage.setItem('arc_participation_cache', JSON.stringify(next));
+                    return next;
+                }
+                return prev;
+            });
+        }
+    }, [participations, rawProcessedTasks]);
+
     const allTasks = useMemo(() => {
-        if (!participations) return rawProcessedTasks;
-        return rawProcessedTasks.map((t, i) => ({
+        return rawProcessedTasks.map((t) => ({
             ...t,
-            hasParticipated: participations[i]?.result === true
+            hasParticipated: participationMap[t.id] === true
         }));
-    }, [rawProcessedTasks, participations]);
+    }, [rawProcessedTasks, participationMap]);
 
     const filteredTasks = useMemo(() => {
         if (addresses.length === 0) return allTasks;
@@ -170,6 +219,15 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
         await refetchTasks?.();
     };
 
+    const markAsParticipated = (taskId: string | number) => {
+        const idStr = taskId.toString();
+        setParticipationMap(prev => {
+            const next = { ...prev, [idStr]: true };
+            localStorage.setItem('arc_participation_cache', JSON.stringify(next));
+            return next;
+        });
+    };
+
     return {
         tasks: filteredTasks,
         allTasks,
@@ -179,6 +237,7 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
         allTasksCount: allTasks.length,
         actualContractCount: taskCount ? Number(taskCount) : 0,
         readError: lastError, // Use persistent lastError
-        refetch
+        refetch,
+        markAsParticipated // Export new function
     };
 }

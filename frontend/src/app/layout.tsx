@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { Web3Provider } from '@/components/Web3Provider';
 import { GoogleAuthProvider } from '@/components/auth/GoogleAuthProvider';
+import { ConsoleSuppressor } from '@/components/ConsoleSuppressor';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -29,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
+        <ConsoleSuppressor />
         <GoogleAuthProvider>
           <Web3Provider>
             {children}

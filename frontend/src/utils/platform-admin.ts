@@ -47,9 +47,7 @@ function getPlatformClient() {
     }).extend(publicActions);
 }
 
-/**
- * Automatically approves a task IF the answer matches the metadata's correct answer.
- */
+// Automatically approves a task IF the answer matches the metadata's correct answer.
 export async function platformAutoVerify(taskId: number | bigint) {
     try {
         console.log(`[Platform Admin] Starting auto-verify for task ${taskId}...`);
@@ -96,18 +94,34 @@ export async function platformAutoVerify(taskId: number | bigint) {
 
                         const workerAnswer = sub[1]; // Answer is at index 1
 
-                        const metadata = JSON.parse(metadataStr);
+                        let metadata: any = {};
+                        try {
+                            // Try parsing as JSON first (Optimized storage)
+                            metadata = JSON.parse(metadataStr);
+                        } catch (e) {
+                            console.warn(`[Platform Admin] Metadata for task ${taskId} is not valid JSON. Likely IPFS Hash: ${metadataStr}`);
+                            // TODO: Add IPFS fetcher here if we move back to IPFS-only.
+                            // For now, if we can't parse metadata, we can't check 'correctAnswer'.
+                            // However, if the task is simple, maybe we defaults?
+                            return false;
+                        }
 
-                        if (metadata.ver !== 'auto' && metadata.verification !== 'auto' && metadata.verificationStrategy !== 'Instant Auto-Pay') {
-                            console.log(`[Platform Admin] Task ${taskId} requires manual verification or consensus. Skipping.`);
+                        // Flexible Strategy Check
+                        const strategy = (metadata.ver || metadata.verification || metadata.verificationStrategy || '').toLowerCase();
+                        const isAuto = strategy === 'auto' || strategy.includes('instant') || strategy.includes('golden') || strategy.includes('classifier');
+
+                        if (!isAuto) {
+                            console.log(`[Platform Admin] Task ${taskId} strategy '${strategy}' does not imply auto-verify. Skipping.`);
                             return false;
                         }
 
                         const correctAnswer = metadata.correctAnswer?.trim().toLowerCase();
                         const submission = workerAnswer?.trim().toLowerCase();
 
+                        console.log(`[Platform Admin] Validating Task ${taskId}: Expected '${correctAnswer}' vs Got '${submission}'`);
+
                         if (!correctAnswer) {
-                            console.warn(`[Platform Admin] Task ${taskId} has 'auto' verification but no correct answer set in metadata.`);
+                            console.warn(`[Platform Admin] Task ${taskId} has auto-verify enabled but no 'correctAnswer' in metadata.`);
                             return false;
                         }
 

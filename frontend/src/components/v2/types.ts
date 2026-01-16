@@ -67,9 +67,15 @@ export interface CampaignConfig {
 
     // Data Enrichment
     dataFields?: { name: string; type: string }[];
-    surveyQuestions?: any[]; // Simplified for now
+    questions?: {
+        question: string;
+        type: 'text' | 'multiple_choice' | 'checkbox' | 'rating';
+        required: boolean;
+        options?: string[];
+    }[];
 
     instructions?: string;
+    exampleImageUrl?: string;
 
     // Logic
     difficulty: 'Easy' | 'Medium' | 'Hard';
