@@ -3,6 +3,7 @@ import { Download, Plus, TrendingUp, ScanLine, MoreHorizontal, Check, X as XIcon
 import { useRouter } from 'next/navigation';
 import { AgencySidebar } from './AgencySidebar';
 import { AgencySettings } from './AgencySettings';
+import { TaskAnswerViewer } from './TaskAnswerViewer';
 import WalletDashboardModal from '../WalletDashboardModal';
 import { useTasks } from '@/hooks/useTasks';
 import { useAccount, useWriteContract } from 'wagmi';
@@ -633,14 +634,41 @@ export const AgencyDashboard: React.FC = () => {
                                         </div>
 
                                         {/* Work Display */}
-                                        <div className="flex-1 bg-gray-900 relative flex items-center justify-center p-8 overflow-auto">
-                                            <div className="text-white text-center">
-                                                <p className="text-sm opacity-50 mb-4 font-mono">SUBMITTED DATA</p>
-                                                <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 max-w-lg text-left">
-                                                    <pre className="text-xs text-emerald-400 whitespace-pre-wrap">
-                                                        {JSON.stringify(selectedReview.metadata || {}, null, 2)}
-                                                    </pre>
+                                        <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden relative">
+                                            {/* Context / Instructions Panel */}
+                                            <div className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm z-10 flex-shrink-0 max-h-48 overflow-y-auto">
+                                                <div className="flex justify-between items-start gap-8">
+                                                    <div className="flex-1">
+                                                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-1.5 tracking-wider flex items-center gap-2">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                                            Instructions
+                                                        </h4>
+                                                        <p className="text-sm text-gray-700 leading-relaxed max-w-prose">
+                                                            {selectedReview.metadata?.desc || selectedReview.description || "No specific instructions provided for this task."}
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Show valid tags if it's an NER task */}
+                                                    {selectedReview.metadata?.options && Array.isArray(selectedReview.metadata.options) && (
+                                                        <div className="max-w-xs text-right">
+                                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-1.5 tracking-wider">Valid Tags</h4>
+                                                            <div className="flex flex-wrap justify-end gap-1.5">
+                                                                {selectedReview.metadata.options.map((opt: string, i: number) => (
+                                                                    <span key={i} className="px-2 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs font-medium text-gray-600">
+                                                                        {opt}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
+                                            </div>
+
+                                            {/* Actual Output Viewer */}
+                                            <div className="flex-1 bg-gray-900 relative flex items-center justify-center p-8 overflow-auto">
+                                                <TaskAnswerViewer
+                                                    task={selectedReview}
+                                                />
                                             </div>
                                         </div>
 

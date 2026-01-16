@@ -241,7 +241,9 @@ export default function CampaignCreatorPage() {
             ver: campaignConfig.verificationStrategy,
             content: campaignConfig.datasetUrl || campaignConfig.textDatasetUrl || campaignConfig.audioDatasetUrl || campaignConfig.sourceDataUrl || "",
             options: campaignConfig.classificationOptions || campaignConfig.labels || campaignConfig.sentimentLabels || [],
+            entityTags: campaignConfig.entityTags || [],
             questions: campaignConfig.questions || [], // Start with empty array if undefined
+            correctAnswer: campaignConfig.correctAnswer, // REQUIRED for Auto-Verification
             timestamp: new Date().toISOString()
         });
 

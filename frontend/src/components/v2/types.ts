@@ -44,6 +44,7 @@ export interface CampaignConfig {
     // Components Data
     datasetUrl?: string;
     textDatasetUrl?: string;
+    textContent?: string; // Raw text for immediate use (e.g. Golden Set Editor)
     audioDatasetUrl?: string;
     sourceDataUrl?: string;
 

@@ -45,6 +45,7 @@ export interface TaskConfig {
     hasRecordInput?: boolean;
     hasTranslationInput?: boolean;
     exampleImageUrl?: string;
+    entityTags?: string[];
 }
 
 export interface WorkerTaskInterfaceProps {
@@ -66,6 +67,138 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
     // Form/Input States
     const [textInput, setTextInput] = useState('');
     const [selectedClassId, setSelectedClassId] = useState<string | number | null>(null);
+
+    // NER State
+    const [nerAnnotations, setNerAnnotations] = useState<{ start: number, end: number, text: string, tag: string, color: string }[]>([]);
+    const [activeNerTag, setActiveNerTag] = useState<string | null>(null);
+
+    // Color generator for tags
+    const getTagColor = (tag: string) => {
+        let hash = 0;
+        for (let i = 0; i < tag.length; i++) hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+        const hue = Math.abs(hash % 360);
+        return `hsl(${hue}, 70%, 85%)`; // Pastel background
+    };
+
+    const handleNerSelection = () => {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) return;
+
+        const container = document.getElementById('ner-text-container');
+        if (!container || !container.contains(selection.anchorNode)) return;
+
+        if (!activeNerTag) {
+            alert("Please select a tag from the toolbar first.");
+            return;
+        }
+
+        const range = selection.getRangeAt(0);
+
+        // ULTRA-ROBUST OFFSET CALCULATION
+        // Clone the content *before* the selection start/end, strip out ignored UI elements, 
+        // and count the remaining text length. This handles all DOM complexity.
+
+        const getCleanOffset = (node: Node, offset: number): number => {
+            try {
+                const preRange = document.createRange();
+                preRange.selectNodeContents(container);
+                preRange.setEnd(node, offset);
+
+                const fragment = preRange.cloneContents();
+                const tempDiv = document.createElement('div');
+                tempDiv.appendChild(fragment);
+
+                // Remove all ignored elements (badges, buttons)
+                const ignored = tempDiv.querySelectorAll('[data-ignore-ner="true"]');
+                ignored.forEach(el => el.remove());
+
+                return tempDiv.textContent?.length || 0;
+            } catch (e) {
+                console.error("Offset calculation failed", e);
+                return -1;
+            }
+        };
+
+        const start = getCleanOffset(range.startContainer, range.startOffset);
+        const end = getCleanOffset(range.endContainer, range.endOffset);
+
+        if (start === -1 || end === -1 || start >= end) {
+            console.warn("Invalid selection offsets calculated.");
+            return;
+        }
+
+        // Get the real text content using the calculated offsets
+        const realText = displayedText.slice(start, end);
+
+        // Simple overlap check
+        const newAnnotations = nerAnnotations.filter(a =>
+            (start >= a.end || end <= a.start)
+        );
+
+        newAnnotations.push({
+            start,
+            end,
+            text: realText,
+            tag: activeNerTag,
+            color: getTagColor(activeNerTag)
+        });
+
+        // Sort by start index
+        newAnnotations.sort((a, b) => a.start - b.start);
+
+        setNerAnnotations(newAnnotations);
+        selection.removeAllRanges();
+    };
+
+    // Helper to render text with highlights
+    const renderHighlightedText = (fullText: string) => {
+        if (nerAnnotations.length === 0) return fullText;
+
+        const segments = [];
+        let lastIndex = 0;
+
+        nerAnnotations.forEach((ann, i) => {
+            // Text before highlight
+            if (ann.start > lastIndex) {
+                const slice = fullText.slice(lastIndex, ann.start);
+                if (slice) segments.push(<span key={`text-${i}`}>{slice}</span>);
+            }
+            // Highlighted text
+            segments.push(
+                <mark
+                    key={`mark-${i}`}
+                    className="relative cursor-pointer group"
+                    style={{ backgroundColor: ann.color, padding: '2px 0' }}
+                >
+                    {fullText.slice(ann.start, ann.end)}
+                    <span
+                        data-ignore-ner="true"
+                        className="absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gray-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10 select-none pointer-events-none"
+                    >
+                        {ann.tag}
+                    </span>
+                    <button
+                        data-ignore-ner="true"
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 hover:bg-red-600 transition z-20 select-none"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setNerAnnotations(prev => prev.filter((_, idx) => idx !== i));
+                        }}
+                    >
+                        ×
+                    </button>
+                </mark>
+            );
+            lastIndex = ann.end;
+        });
+
+        // Remaining text
+        if (lastIndex < fullText.length) {
+            segments.push(<span key="text-end">{fullText.slice(lastIndex)}</span>);
+        }
+
+        return segments;
+    };
 
     // Timer
     useEffect(() => {
@@ -95,6 +228,7 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                 text: finalOutputText,
                 classification: selectedClassId,
                 formData: task.type === 'form' ? surveyAnswers : undefined,
+                ner: nerAnnotations // Add NER output
                 // In a real app, we'd gather canvas bbox coordinates, audio blobs, etc.
             }
         };
@@ -199,16 +333,35 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                         </p>
                     </div>
 
+                    {/* VISUAL GUIDE FOR NER */}
+                    {config.entityTags && (
+                        <div className="mt-4 pt-4 border-t border-gray-800">
+                            <div className="bg-gray-800 p-2 rounded-lg border border-gray-700 mb-3 opacity-80 group/guide relative">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">NER Guide</p>
+                                <div className="relative cursor-zoom-in" onClick={() => setExpandedImage("/ner_guide.png")}>
+                                    <img
+                                        src="/ner_guide.png"
+                                        className="w-full rounded border border-gray-600 mb-2 object-cover"
+                                        alt="NER Guide"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover/guide:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/guide:opacity-100">
+                                        <Maximize2 className="w-5 h-5 text-white drop-shadow-lg" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* VISUAL GUIDE FOR BBOX */}
                     {config.tools?.includes('draw') && (
                         <div className="mt-4 pt-4 border-t border-gray-800">
                             <div className="bg-gray-800 p-2 rounded-lg border border-gray-700 mb-3 opacity-80 group/guide relative">
                                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Box Guide</p>
-                                <div className="relative cursor-zoom-in" onClick={() => setExpandedImage(config.exampleImageUrl || "/bbox_tips_preview_1768020935499.png")}>
+                                <div className="relative cursor-zoom-in" onClick={() => setExpandedImage(config.exampleImageUrl || "/ner_guide.png")}>
                                     <img
-                                        src={config.exampleImageUrl || "/bbox_tips_preview_1768020935499.png"}
+                                        src={config.exampleImageUrl || "/ner_guide.png"}
                                         className="w-full rounded border border-gray-600 mb-2 object-cover"
-                                        alt="Guide"
+                                        alt="NER Guide"
                                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                     />
                                     <div className="absolute inset-0 bg-black/0 group-hover/guide:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/guide:opacity-100">
@@ -562,15 +715,56 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
     const renderNLP = () => (
         <div className="w-full max-w-3xl bg-white rounded-lg shadow-xl text-gray-900 overflow-hidden flex flex-col min-h-[500px]">
             <div className="bg-gray-100 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="font-bold text-gray-700">Source Text</h3>
+                <h3 className="font-bold text-gray-700">
+                    {config.entityTags ? 'Named Entity Recognition' : 'Source Text'}
+                </h3>
                 <span className="bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded">ID: {task.id}</span>
             </div>
-            <div className="p-8 text-lg leading-relaxed font-serif whitespace-pre-wrap">
-                {displayedText}
+
+            {/* NER Toolbar */}
+            {config.entityTags && config.entityTags.length > 0 && (
+                <div className="px-6 py-3 bg-white border-b border-gray-100 flex gap-2 flex-wrap items-center">
+                    <span className="text-xs font-bold text-gray-400 uppercase mr-2">Tags:</span>
+                    {config.entityTags.map(tag => (
+                        <button
+                            key={tag}
+                            onClick={() => setActiveNerTag(tag)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-2 border ${activeNerTag === tag
+                                ? 'ring-2 ring-offset-1 ring-blue-500 shadow-sm'
+                                : 'hover:bg-gray-50 border-gray-200 text-gray-600'
+                                }`}
+                            style={{
+                                backgroundColor: activeNerTag === tag ? getTagColor(tag) : undefined,
+                                borderColor: activeNerTag === tag ? 'transparent' : undefined,
+                                color: activeNerTag === tag ? '#1f2937' : undefined
+                            }}
+                        >
+                            <span className="w-2 h-2 rounded-full bg-current opacity-50" />
+                            {tag}
+                        </button>
+                    ))}
+                    <div className="ml-auto text-[10px] text-gray-400 font-medium">
+                        Select a tag, then highlight text.
+                    </div>
+                </div>
+            )}
+
+            <div className="p-8 text-lg leading-relaxed font-serif whitespace-pre-wrap flex-1 relative">
+                {config.entityTags ? (
+                    <div
+                        id="ner-text-container"
+                        onMouseUp={handleNerSelection}
+                        className="prose max-w-none text-gray-800"
+                    >
+                        {renderHighlightedText(displayedText)}
+                    </div>
+                ) : (
+                    displayedText
+                )}
             </div>
 
-            {/* Classification Options */}
-            {config.classes && config.classes.length > 0 && (
+            {/* Classification Options (Only if NOT NER) */}
+            {!config.entityTags && config.classes && config.classes.length > 0 && (
                 <div className="mt-auto border-t border-gray-200 p-6 bg-gray-50">
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-3">Classification</label>
                     <div className="flex flex-wrap gap-3">

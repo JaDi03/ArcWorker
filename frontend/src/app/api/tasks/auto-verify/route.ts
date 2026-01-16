@@ -22,12 +22,31 @@ export async function POST(request: Request) {
         }
 
         if (result.success) {
-            return NextResponse.json({ success: true, message: 'Auto-verification approved!', txHash: result.txHash });
+            return new NextResponse(JSON.stringify({
+                success: true,
+                message: 'Auto-verification approved!',
+                txHash: result.txHash
+            }, (key, value) =>
+                typeof value === 'bigint' ? value.toString() : value
+            ), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
         } else {
-            return NextResponse.json({ error: result.reason || 'Unknown verification failure' }, { status: 400 });
+            return new NextResponse(JSON.stringify({
+                error: result.reason || 'Unknown verification failure'
+            }, (key, value) =>
+                typeof value === 'bigint' ? value.toString() : value
+            ), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
         }
     } catch (error: any) {
         console.error("Auto-verify API Error:", error);
-        return NextResponse.json({ error: error.message || "Unknown server error" }, { status: 500 });
+        return new NextResponse(JSON.stringify({ error: error.message || "Unknown server error" }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 }

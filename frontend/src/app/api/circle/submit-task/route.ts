@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createCircleContractCall, getCircleWallet, createCircleSession, getOrCreateCircleUser } from '@/arcworker-sdk/wallet/server';
 import { CONTRACTS } from '@/utils/contracts';
-import { platformAutoVerify } from '@/utils/platform-admin';
+
 
 export async function POST(request: Request) {
     try {

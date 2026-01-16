@@ -266,6 +266,12 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
                     tools: ['poly', 'select'],
                     classes: classes
                 };
+            case 'nlp-ner':
+                return {
+                    instruction,
+                    entityTags: metadata.entityTags || ['Person', 'Organization', 'Location'], // Fallback defaults
+                    classes: [] // No classification classes for NER
+                };
             case 'image-classification':
             case 'vision-class':
             case 'object-verification':
@@ -307,7 +313,7 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
             setIsSubmitting(true);
 
             // Extract the most relevant answer string for on-chain verification
-            const answer = result.output.classification || result.output.text || "";
+            const answer = result.output.classification || result.output.text || (result.output.ner ? JSON.stringify(result.output.ner) : "") || "";
 
             console.log(`[Worker Feed] Submitting answer: "${answer}" for Task #${selectedTask.id}`);
 
@@ -341,8 +347,10 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
                 });
                 alert("Task submitted successfully via Wallet!");
 
-                // Trigger Verification (Fire and forget)
-                triggerAutoVerify(selectedTask.id);
+                // Trigger Verification (Only for Auto/Consensus)
+                if (selectedTask.verification !== 'Manual Review') {
+                    triggerAutoVerify(selectedTask.id);
+                }
 
                 // Optimistic Update
                 const taskHash = selectedTask.metadata?.metadataHash || selectedTask.id; // Fallback to ID
@@ -396,9 +404,11 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
 
                 alert("Task submitted successfully via Circle!");
 
-                // Trigger Verification (Fire and forget)
+                // Trigger Verification (Only for Auto/Consensus)
                 // NOW SAFE: The SDK has confirmed execution!
-                triggerAutoVerify(selectedTask.id);
+                if (selectedTask.verification !== 'Manual Review') {
+                    triggerAutoVerify(selectedTask.id);
+                }
 
                 // Optimistic Update
                 const taskHash = selectedTask.metadata?.metadataHash || selectedTask.id; // Fallback to ID

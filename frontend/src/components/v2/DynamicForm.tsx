@@ -11,6 +11,7 @@ import {
     UploadAudioStep,
     UploadCsvStep
 } from './DynamicFormSteps';
+import { GoldenSetEditor } from './GoldenSetEditor';
 
 interface DynamicFormProps {
     components: ComponentType[];
@@ -142,26 +143,60 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
         </Wrapper>
     );
 
+    const [tagInput, setTagInput] = useState('');
+
     const renderEntityTags = (index: number) => (
         <Wrapper title="Entity Tags" index={index}>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-                {config.entityTags?.map((tag: string, i: number) => (
-                    <div key={i} className="flex items-center gap-2 p-2 border rounded bg-pink-50 border-pink-100 text-pink-700 font-medium">
-                        <span className="w-3 h-3 rounded-full bg-pink-500"></span> {tag}
-                        <button
-                            className="ml-auto text-gray-400 hover:text-red-500"
-                            onClick={() => onChange({ entityTags: config.entityTags?.filter((_: string, idx: number) => idx !== i) })}
-                        >
-                            ×
-                        </button>
-                    </div>
-                ))}
-                <button
-                    className="border border-dashed border-gray-300 p-2 rounded text-gray-500 hover:bg-gray-50"
-                    onClick={() => onChange({ entityTags: [...(config.entityTags || []), 'New Tag'] })}
-                >
-                    + Add Tag
-                </button>
+            <div className="space-y-3">
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        placeholder="Type a tag (e.g. Person, Organization, Location)..."
+                        className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-medium text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (tagInput.trim()) {
+                                    onChange({ entityTags: [...(config.entityTags || []), tagInput.trim()] });
+                                    setTagInput('');
+                                }
+                            }
+                        }}
+                    />
+                    <button
+                        className="bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!tagInput.trim()}
+                        onClick={() => {
+                            if (tagInput.trim()) {
+                                onChange({ entityTags: [...(config.entityTags || []), tagInput.trim()] });
+                                setTagInput('');
+                            }
+                        }}
+                    >
+                        Add Tag
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                    {config.entityTags?.map((tag: string, i: number) => (
+                        <div key={i} className="flex items-center gap-2 p-2 border rounded bg-pink-50 border-pink-100 text-pink-700 font-medium">
+                            <span className="w-3 h-3 rounded-full bg-pink-500"></span> {tag}
+                            <button
+                                className="ml-auto text-gray-400 hover:text-red-500"
+                                onClick={() => onChange({ entityTags: config.entityTags?.filter((_: string, idx: number) => idx !== i) })}
+                            >
+                                ×
+                            </button>
+                        </div>
+                    ))}
+                    {(!config.entityTags || config.entityTags.length === 0) && (
+                        <div className="col-span-2 text-center py-4 border-2 border-dashed border-gray-100 rounded-lg text-gray-400 text-xs uppercase font-bold tracking-wider">
+                            No tags added yet
+                        </div>
+                    )}
+                </div>
             </div>
         </Wrapper>
     );
@@ -598,15 +633,28 @@ export const DynamicForm: React.FC<DynamicFormProps> = React.memo(({ components,
             {config.verificationStrategy === 'Golden Set' && (
                 <div className="p-4 bg-amber-50 border border-amber-100 rounded-lg animate-fade-in">
                     <label className="block text-xs font-black text-amber-800 uppercase tracking-wider mb-2">Ground Truth Answer</label>
-                    <input
-                        type="text"
-                        placeholder="Enter the correct answer for auto-verification..."
-                        className="w-full bg-white border border-amber-200 rounded px-3 py-2 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-amber-500 outline-none"
-                        value={config.correctAnswer || ''}
-                        onChange={(e) => onChange({ correctAnswer: e.target.value })}
-                    />
+
+                    {/* VISUAL EDITOR FOR NER */}
+                    {config.moduleId === 'nlp-ner' ? (
+                        <GoldenSetEditor
+                            textContent={config.textContent || ""}
+                            entityTags={config.entityTags || []}
+                            value={config.correctAnswer || ""}
+                            onChange={(val) => onChange({ correctAnswer: val })}
+                        />
+                    ) : (
+                        /* DEFAULT TEXT INPUT FOR OTHERS */
+                        <input
+                            type="text"
+                            placeholder="Enter the correct answer for auto-verification..."
+                            className="w-full bg-white border border-amber-200 rounded px-3 py-2 text-sm font-bold text-gray-800 focus:ring-2 focus:ring-amber-500 outline-none"
+                            value={config.correctAnswer || ''}
+                            onChange={(e) => onChange({ correctAnswer: e.target.value })}
+                        />
+                    )}
+
                     <p className="text-[10px] text-amber-700 mt-2 font-bold italic">
-                        * Workers who submit this exact text will be approved and paid immediately by the protocol.
+                        * Workers who submit this exact {config.moduleId === 'nlp-ner' ? 'structure' : 'text'} will be approved and paid immediately by the protocol.
                     </p>
                 </div>
             )}

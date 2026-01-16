@@ -270,7 +270,10 @@ export const UploadTextStep: React.FC<StepProps> = ({ index, config, onChange })
                                         if (result.url) {
                                             setUploadStatus('success');
                                             setFileName('phrase.txt');
-                                            onChange({ textDatasetUrl: result.url });
+                                            onChange({
+                                                textDatasetUrl: result.url,
+                                                textContent: text // Save raw text for Editor
+                                            });
                                         }
                                     })
                                     .catch(err => {

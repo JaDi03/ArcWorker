@@ -23,6 +23,55 @@ export const publicClient = createPublicClient({
 });
 
 
+
+// Helper: Canonicalize JSON object for comparison
+// 1. Sorts keys
+// 2. Removes ignored keys (color, etc.)
+// 3. Trims strings
+function canonicalize(obj: any): any {
+    if (Array.isArray(obj)) {
+        return obj.map(canonicalize);
+    } else if (typeof obj === 'object' && obj !== null) {
+        return Object.keys(obj)
+            .sort()
+            .reduce((acc: any, key) => {
+                // IGNORE FIELDS: color, etc.
+                if (['color', 'ui_id', 'id'].includes(key)) return acc;
+
+                const val = obj[key];
+                // RAW VALUE TRANSFORMS: Trim strings
+                if (typeof val === 'string') {
+                    acc[key] = val.trim();
+                } else {
+                    acc[key] = canonicalize(val);
+                }
+                return acc;
+            }, {});
+    } else if (typeof obj === 'string') {
+        return obj.trim();
+    }
+    return obj;
+}
+
+// Helper: Smart comparison for Strings and JSON
+function areAnswersEqual(sub: string, correct: string): boolean {
+    if (!sub || !correct) return false;
+    const s = sub.trim();
+    const c = correct.trim();
+    // 1. Direct String Compare (Fast path)
+    if (s.toLowerCase() === c.toLowerCase()) return true;
+
+    // 2. JSON Structure Compare
+    try {
+        const jsonS = JSON.parse(s);
+        const jsonC = JSON.parse(c);
+        return JSON.stringify(canonicalize(jsonS)) === JSON.stringify(canonicalize(jsonC));
+    } catch (e) {
+        // One or both are not valid JSON, so they must be different since string compare failed
+        return false;
+    }
+}
+
 // Lazy load functionality to prevent top-level crashes if env is missing
 function getPlatformClient() {
     const key = process.env.DEPLOYER_PRIVATE_KEY;
@@ -111,8 +160,8 @@ export async function platformAutoVerify(taskId: number | bigint) {
                             return { success: false, reason: `Strategy '${strategy}' is not auto-verifiable` };
                         }
 
-                        const correctAnswer = metadata.correctAnswer?.trim().toLowerCase();
-                        const submission = workerAnswer?.trim().toLowerCase();
+                        const correctAnswer = metadata.correctAnswer;
+                        const submission = workerAnswer;
 
                         console.log(`[Platform Admin] Validating Task ${taskId}: Expected '${correctAnswer}' vs Got '${submission}'`);
 
@@ -121,8 +170,8 @@ export async function platformAutoVerify(taskId: number | bigint) {
                             return { success: false, reason: "Metadata missing 'correctAnswer'" };
                         }
 
-                        if (submission === correctAnswer) {
-                            console.log(`[Platform Admin] MATCH: '${submission}' === '${correctAnswer}'. Approving...`);
+                        if (areAnswersEqual(submission, correctAnswer)) {
+                            console.log(`[Platform Admin] MATCH. Approving...`);
 
                             const hash = await client.writeContract({
                                 address: CONTRACTS.TaskEscrow.address,
@@ -134,13 +183,19 @@ export async function platformAutoVerify(taskId: number | bigint) {
                             processed = true;
                             return { success: true, txHash: hash };
                         } else {
-                            console.log(`[Platform Admin] MISMATCH: '${submission}' !== '${correctAnswer}'. Manual review or consensus required.`);
-                            return { success: false, reason: `Mismatch: Expected '${correctAnswer}' but got '${submission}'` };
+                            console.log(`[Platform Admin] MISMATCH. Manual review required.`);
+                            return { success: false, reason: `Mismatch: Expected matches '${correctAnswer}' but got '${submission}'` };
                         }
 
                     } catch (err: any) {
-                        console.error(`[Platform Admin] Error processing validation for task ${taskId}:`, err.message);
-                        // continue loop
+                        const message = err.message || '';
+                        if (message.includes('reverted') || message.includes('authorized')) {
+                            console.error(`[Platform Admin] FATAL: Contract reverted. Reason: ${message}`);
+                            return { success: false, reason: `Contract Reverted: Not Authorized (Agency Only)` };
+                        }
+
+                        console.error(`[Platform Admin] Error processing validation for task ${taskId}:`, message);
+                        // Only continue loop for non-fatal errors (network, indexing)
                     }
                 }
             }
