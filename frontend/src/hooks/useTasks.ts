@@ -26,7 +26,7 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
         address: CONTRACTS.TaskEscrow.address,
         abi: CONTRACTS.TaskEscrow.abi,
         functionName: 'getRecentTasks',
-        args: [BigInt(50)], // Fetch last 50 for improved stability
+        args: [BigInt(200)], // Increased to 200 to catch older stuck tasks (like #118, #101)
         query: {
             staleTime: 10000, // Increase stale time
             refetchInterval: 10000,

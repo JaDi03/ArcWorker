@@ -164,38 +164,55 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
         const now = Math.floor(Date.now() / 1000);
         const currentUserLower = userAddress?.toLowerCase();
 
-        // 1. Identify campaigns (metadataHash) where the current worker has already participated
-        const participatedCampaigns = new Set<string>();
+        // Helper to determine unique campaign identifier
+        const getGroupKey = (t: any) => {
+            if (t.metadataHash && t.metadataHash.length > 2) return t.metadataHash;
+            // Fallback: Group by Title + Agency to prevent unrelated tasks from mixing
+            if (t.title && t.title !== 'Unknown') return `${t.title}-${t.agency}`;
+            return `single-${t.id}`; // Treating specific tasks as their own group if no data
+        };
+
+        // 1. Identify campaigns where the current worker has already participated
+        const participatedGroups = new Set<string>();
+
         if (currentUserLower) {
             rawTasks.forEach((t: any) => {
-                if ((t.hasParticipated || recentlySubmitted.has(t.metadataHash) || recentlySubmitted.has(t.id.toString())) && t.metadataHash) {
-                    participatedCampaigns.add(t.metadataHash);
+                const groupKey = getGroupKey(t);
+
+                // Check if User Participated (RPC) OR Locally Submitted (Cache)
+                const isParticipated = t.hasParticipated ||
+                    recentlySubmitted.has(t.metadataHash) ||
+                    recentlySubmitted.has(t.id.toString());
+
+                if (isParticipated) {
+                    participatedGroups.add(groupKey);
                 }
             });
         }
 
-        // 2. Group available tasks (Created status, currentSubmissions < requiredSubmissions, not expired) by metadataHash
+        // 2. Group available tasks by GroupKey
         const groups: Record<string, any[]> = {};
         rawTasks.forEach((t: any) => {
             const isAvailable = (t.status === 0 || t.status === 1) &&
                 Number(t.currentSubmissions) < Number(t.requiredSubmissions) &&
                 Number(t.deadline) > now &&
-                t.metadataHash &&
                 !recentlySubmitted.has(t.id.toString()) &&
-                !t.hasParticipated; // Double check participation at task level
+                !t.hasParticipated;
 
             if (isAvailable) {
-                if (!groups[t.metadataHash]) groups[t.metadataHash] = [];
-                groups[t.metadataHash].push(t);
+                const groupKey = getGroupKey(t);
+                if (!groups[groupKey]) groups[groupKey] = [];
+                groups[groupKey].push(t);
             }
         });
 
         // 3. Transform groups into TaskOpportunities, skipping participated ones
         const opportunities: TaskOpportunity[] = [];
 
-        Object.entries(groups).forEach(([hash, tasksInGroup]) => {
-            if (participatedCampaigns.has(hash)) {
-                // User already did one task from this campaign, skip entire group
+        Object.entries(groups).forEach(([groupKey, tasksInGroup]) => {
+            // CRITICAL: Prevent double dipping
+            // If user has done ANY task in this group (Campaign), they cannot see ANY other tasks in this group.
+            if (participatedGroups.has(groupKey)) {
                 return;
             }
 
@@ -224,9 +241,9 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
                 timePerTaskSec: metadata.timePerTaskSec || 45,
                 difficulty: metadata.diff || metadata.difficulty || 'Medium',
                 verification: verificationLabel,
-                availableTasks: tasksInGroup.length,
+                availableTasks: tasksInGroup.length, // Shows how many tasks are in this campaign
                 tags: metadata.tags || [category.toUpperCase()],
-                metadata: { ...metadata, metadataHash: representative.metadataHash } // Store for dynamic config & filtering
+                metadata: { ...metadata, metadataHash: representative.metadataHash }
             });
         });
 

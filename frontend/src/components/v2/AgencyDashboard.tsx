@@ -561,6 +561,31 @@ export const AgencyDashboard: React.FC = () => {
                                         </div>
                                     )}
 
+                                    {/* NEW: Explicit Task ID List for Debugging/Management */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 tracking-wider">Campaign Tasks (IDs)</h4>
+                                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
+                                            {agencyTasks
+                                                .filter((t: any) => (t.title === selectedCampaign.title || (!t.title && selectedCampaign.title === 'Untitled Campaign')))
+                                                .sort((a: any, b: any) => Number(b.id) - Number(a.id))
+                                                .map((t: any) => (
+                                                    <div
+                                                        key={t.id}
+                                                        title={`Status: ${t.status === 0 ? 'Open' : t.status === 1 ? 'Submitted' : t.status === 4 ? 'Cancelled' : 'Closed'}`}
+                                                        className={`px-2 py-1 rounded text-xs font-mono border flex items-center gap-1 cursor-help
+                                                            ${t.status === 0 ? 'bg-green-50 text-green-700 border-green-200' :
+                                                                t.status === 1 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                                                    t.status === 4 ? 'bg-red-50 text-red-400 border-red-100 decoration-line-through' :
+                                                                        'bg-gray-50 text-gray-500 border-gray-200'}
+                                                        `}
+                                                    >
+                                                        #{t.id}
+                                                    </div>
+                                                ))
+                                            }
+                                        </div>
+                                    </div>
+
                                     <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
                                         <div className="text-xs text-gray-400">
                                             <p>Agency: <span className="font-mono">{selectedCampaign.agency?.slice(0, 10) || 'Unknown'}...</span></p>
