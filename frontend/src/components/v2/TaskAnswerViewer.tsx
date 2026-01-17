@@ -62,43 +62,79 @@ export const TaskAnswerViewer = ({ task }: { task: any }) => {
         // ... (existing NER code)
     }
 
+    // IMAGE URL HELPER
+    const imageUrl = task.metadata?.content || task.metadata?.imageUrl || task.imageUrl;
+    const isVisionTask = !!imageUrl && (Array.isArray(parsedAnswer) && parsedAnswer.length > 0 && (parsedAnswer[0].x !== undefined || parsedAnswer[0].points !== undefined));
+
     // NEW: Handle Boxes (Bounding Boxes)
     if (Array.isArray(parsedAnswer) && parsedAnswer.length > 0 && parsedAnswer[0].x !== undefined && parsedAnswer[0].w !== undefined) {
         return (
-            <div className="w-full max-w-2xl bg-white rounded-lg shadow-xl overflow-hidden">
-                <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h4 className="font-bold text-gray-700">Object Detection (Boxes)</h4>
-                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-mono">
-                        {parsedAnswer.length} objects
-                    </span>
-                </div>
-                <div className="p-0">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-gray-500 font-semibold">
-                            <tr>
-                                <th className="px-6 py-3">Label</th>
-                                <th className="px-6 py-3">Dimensions</th>
-                                <th className="px-6 py-3 text-right">Coordinates</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {parsedAnswer.map((box: any, i: number) => (
-                                <tr key={i} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4">
-                                        <span className="px-2 py-0.5 rounded text-xs font-bold text-white shadow-sm" style={{ backgroundColor: box.color || '#fbbf24' }}>
+            <div className="flex flex-col gap-6 w-full max-w-4xl">
+                {/* Visual Preview */}
+                {imageUrl && (
+                    <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-2xl relative flex items-center justify-center min-h-[400px]">
+                        <img src={imageUrl} className="max-w-full max-h-[600px] object-contain opacity-80" alt="Task Content" />
+                        <div className="absolute inset-0 flex items-center justify-center p-8">
+                            <div className="relative" style={{ width: '800px', height: '600px' }}> {/* We use original 800x600 coordinate system from WorkerTaskInterface */}
+                                {parsedAnswer.map((box: any, i: number) => (
+                                    <div
+                                        key={i}
+                                        className="absolute border-2 transition-all cursor-help group"
+                                        style={{
+                                            left: box.x,
+                                            top: box.y,
+                                            width: box.w,
+                                            height: box.h,
+                                            borderColor: box.color || '#fbbf24',
+                                            backgroundColor: `${box.color || '#fbbf24'}20`
+                                        }}
+                                    >
+                                        <div className="absolute -top-6 left-0 px-2 py-0.5 text-[10px] font-bold text-white rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity"
+                                            style={{ backgroundColor: box.color || '#fbbf24' }}>
                                             {box.label || 'Object'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-600 font-mono text-xs">
-                                        {Math.round(box.w)}x{Math.round(box.h)}
-                                    </td>
-                                    <td className="px-6 py-4 text-right text-gray-400 font-mono text-xs">
-                                        X:{Math.round(box.x)} Y:{Math.round(box.y)}
-                                    </td>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="w-full bg-white rounded-lg shadow-xl overflow-hidden">
+                    <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                        <h4 className="font-bold text-gray-700">Object Detection (Boxes)</h4>
+                        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-mono">
+                            {parsedAnswer.length} objects
+                        </span>
+                    </div>
+                    <div className="p-0">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-500 font-semibold">
+                                <tr>
+                                    <th className="px-6 py-3">Label</th>
+                                    <th className="px-6 py-3">Dimensions</th>
+                                    <th className="px-6 py-3 text-right">Coordinates</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {parsedAnswer.map((box: any, i: number) => (
+                                    <tr key={i} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4">
+                                            <span className="px-2 py-0.5 rounded text-xs font-bold text-white shadow-sm" style={{ backgroundColor: box.color || '#fbbf24' }}>
+                                                {box.label || 'Object'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-gray-600 font-mono text-xs">
+                                            {Math.round(box.w)}×{Math.round(box.h)}
+                                        </td>
+                                        <td className="px-6 py-4 text-right text-gray-400 font-mono text-xs">
+                                            X:{Math.round(box.x)} Y:{Math.round(box.y)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         );
@@ -107,40 +143,61 @@ export const TaskAnswerViewer = ({ task }: { task: any }) => {
     // NEW: Handle Polygons (Segmentation)
     if (Array.isArray(parsedAnswer) && parsedAnswer.length > 0 && parsedAnswer[0].points !== undefined) {
         return (
-            <div className="w-full max-w-2xl bg-white rounded-lg shadow-xl overflow-hidden">
-                <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h4 className="font-bold text-gray-700">Segmentation Masks</h4>
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-mono">
-                        {parsedAnswer.length} regions
-                    </span>
-                </div>
-                <div className="p-0">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-gray-500 font-semibold">
-                            <tr>
-                                <th className="px-6 py-3">Region</th>
-                                <th className="px-6 py-3">Complexity</th>
-                                <th className="px-6 py-3 text-right">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
+            <div className="flex flex-col gap-6 w-full max-w-4xl">
+                {/* Visual Preview */}
+                {imageUrl && (
+                    <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-2xl relative flex items-center justify-center min-h-[400px]">
+                        <img src={imageUrl} className="max-w-full max-h-[600px] object-contain opacity-80" alt="Task Content" />
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
                             {parsedAnswer.map((poly: any, i: number) => (
-                                <tr key={i} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4">
-                                        <span className="px-2 py-0.5 rounded text-xs font-bold text-white shadow-sm" style={{ backgroundColor: poly.color || '#10b981' }}>
-                                            {poly.label || 'Region'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-600 font-mono text-xs">
-                                        {poly.points?.length || 0} vertices
-                                    </td>
-                                    <td className="px-6 py-4 text-right text-gray-400">
-                                        <span className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">Point Data Active</span>
-                                    </td>
-                                </tr>
+                                <polygon
+                                    key={i}
+                                    points={poly.points.map((p: any) => `${p.x},${p.y}`).join(' ')}
+                                    fill={poly.color || '#10b981'}
+                                    fillOpacity="0.4"
+                                    stroke={poly.color || '#10b981'}
+                                    strokeWidth="2"
+                                />
                             ))}
-                        </tbody>
-                    </table>
+                        </svg>
+                    </div>
+                )}
+
+                <div className="w-full bg-white rounded-lg shadow-xl overflow-hidden">
+                    <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                        <h4 className="font-bold text-gray-700">Segmentation Masks</h4>
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-mono">
+                            {parsedAnswer.length} regions
+                        </span>
+                    </div>
+                    <div className="p-0">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-500 font-semibold">
+                                <tr>
+                                    <th className="px-6 py-3">Region</th>
+                                    <th className="px-6 py-3">Complexity</th>
+                                    <th className="px-6 py-3 text-right">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {parsedAnswer.map((poly: any, i: number) => (
+                                    <tr key={i} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4">
+                                            <span className="px-2 py-0.5 rounded text-xs font-bold text-white shadow-sm" style={{ backgroundColor: poly.color || '#10b981' }}>
+                                                {poly.label || 'Region'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-gray-600 font-mono text-xs">
+                                            {poly.points?.length || 0} vertices
+                                        </td>
+                                        <td className="px-6 py-4 text-right text-gray-400">
+                                            <span className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">Point Data Active</span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         );
