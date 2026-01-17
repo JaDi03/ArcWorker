@@ -353,7 +353,13 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
             setIsSubmitting(true);
 
             // Extract the most relevant answer string for on-chain verification
-            const answer = result.output.classification || result.output.text || (result.output.ner ? JSON.stringify(result.output.ner) : "") || "";
+            const answer =
+                (result.output.boxes && result.output.boxes.length > 0) ? JSON.stringify(result.output.boxes) :
+                    (result.output.polygons && result.output.polygons.length > 0) ? JSON.stringify(result.output.polygons) :
+                        result.output.classification ||
+                        result.output.text ||
+                        (result.output.ner ? JSON.stringify(result.output.ner) : "") ||
+                        "";
 
             console.log(`[Worker Feed] Submitting answer: "${answer}" for Task #${selectedTask.id}`);
 

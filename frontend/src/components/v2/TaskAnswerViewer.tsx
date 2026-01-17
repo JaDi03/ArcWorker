@@ -59,50 +59,89 @@ export const TaskAnswerViewer = ({ task }: { task: any }) => {
     if (!submissionData && !answer) return <div className="text-gray-500">No submission found for this task.</div>;
 
     if (isNER && Array.isArray(parsedAnswer)) {
+        // ... (existing NER code)
+    }
+
+    // NEW: Handle Boxes (Bounding Boxes)
+    if (Array.isArray(parsedAnswer) && parsedAnswer.length > 0 && parsedAnswer[0].x !== undefined && parsedAnswer[0].w !== undefined) {
         return (
             <div className="w-full max-w-2xl bg-white rounded-lg shadow-xl overflow-hidden">
                 <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h4 className="font-bold text-gray-700">NER Annotations</h4>
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-mono">
-                        {parsedAnswer.length} entities
+                    <h4 className="font-bold text-gray-700">Object Detection (Boxes)</h4>
+                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-mono">
+                        {parsedAnswer.length} objects
                     </span>
                 </div>
                 <div className="p-0">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 text-gray-500 font-semibold">
                             <tr>
-                                <th className="px-6 py-3">Entity Text</th>
-                                <th className="px-6 py-3">Tag</th>
-                                <th className="px-6 py-3 text-right">Position</th>
+                                <th className="px-6 py-3">Label</th>
+                                <th className="px-6 py-3">Dimensions</th>
+                                <th className="px-6 py-3 text-right">Coordinates</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {parsedAnswer.map((ann: any, i: number) => (
+                            {parsedAnswer.map((box: any, i: number) => (
                                 <tr key={i} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 font-bold text-gray-900">"{ann.text}"</td>
                                     <td className="px-6 py-4">
-                                        <span
-                                            className="px-2 py-0.5 rounded text-xs font-bold text-white shadow-sm"
-                                            style={{ backgroundColor: ann.color || '#3b82f6' }}
-                                        >
-                                            {ann.tag}
+                                        <span className="px-2 py-0.5 rounded text-xs font-bold text-white shadow-sm" style={{ backgroundColor: box.color || '#fbbf24' }}>
+                                            {box.label || 'Object'}
                                         </span>
                                     </td>
+                                    <td className="px-6 py-4 text-gray-600 font-mono text-xs">
+                                        {Math.round(box.w)}x{Math.round(box.h)}
+                                    </td>
                                     <td className="px-6 py-4 text-right text-gray-400 font-mono text-xs">
-                                        {ann.start}:{ann.end}
+                                        X:{Math.round(box.x)} Y:{Math.round(box.y)}
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
-                {/* Raw JSON Fallback Toggle */}
-                <details className="p-4 border-t border-gray-100">
-                    <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">View Raw Data</summary>
-                    <pre className="mt-2 p-3 bg-gray-900 rounded text-green-400 text-xs overflow-auto">
-                        {JSON.stringify(parsedAnswer, null, 2)}
-                    </pre>
-                </details>
+            </div>
+        );
+    }
+
+    // NEW: Handle Polygons (Segmentation)
+    if (Array.isArray(parsedAnswer) && parsedAnswer.length > 0 && parsedAnswer[0].points !== undefined) {
+        return (
+            <div className="w-full max-w-2xl bg-white rounded-lg shadow-xl overflow-hidden">
+                <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                    <h4 className="font-bold text-gray-700">Segmentation Masks</h4>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-mono">
+                        {parsedAnswer.length} regions
+                    </span>
+                </div>
+                <div className="p-0">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-500 font-semibold">
+                            <tr>
+                                <th className="px-6 py-3">Region</th>
+                                <th className="px-6 py-3">Complexity</th>
+                                <th className="px-6 py-3 text-right">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {parsedAnswer.map((poly: any, i: number) => (
+                                <tr key={i} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4">
+                                        <span className="px-2 py-0.5 rounded text-xs font-bold text-white shadow-sm" style={{ backgroundColor: poly.color || '#10b981' }}>
+                                            {poly.label || 'Region'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-gray-600 font-mono text-xs">
+                                        {poly.points?.length || 0} vertices
+                                    </td>
+                                    <td className="px-6 py-4 text-right text-gray-400">
+                                        <span className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">Point Data Active</span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         );
     }

@@ -228,8 +228,9 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                 text: finalOutputText,
                 classification: selectedClassId,
                 formData: task.type === 'form' ? surveyAnswers : undefined,
-                ner: nerAnnotations // Add NER output
-                // In a real app, we'd gather canvas bbox coordinates, audio blobs, etc.
+                ner: nerAnnotations, // Add NER output
+                boxes: boxes,        // Add Bounding Boxes output
+                polygons: polygons   // Add Segmentation output
             }
         };
 
