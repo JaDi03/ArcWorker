@@ -122,10 +122,29 @@ interface WorkerTaskFeedProps {
 }
 
 export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
-    const { address: userAddress, isConnected } = useAccount();
-    const { allTasks: rawTasks, isLoading, refetch, markAsParticipated } = useTasks(undefined, userAddress);
+    const { address: wagmiAddress, isConnected } = useAccount();
+    const [circleAddress, setCircleAddress] = useState<string | null>(null);
+
+    // Dynamic Address Resolution: Prioritize Wagmi (Metamask), fallback to Circle
+    const userAddress = wagmiAddress || circleAddress;
+
+    const { allTasks: rawTasks, isLoading, refetch, markAsParticipated } = useTasks(undefined, userAddress || undefined);
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+
+    // Sync Circle address from localStorage
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('arc_user');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    const addr = parsed.address || parsed.walletAddress;
+                    if (addr) setCircleAddress(addr);
+                } catch (e) { }
+            }
+        }
+    }, []);
 
     // Local blacklist for immediate feedback, persisted per-user to localStorage
     const [recentlySubmitted, setRecentlySubmitted] = useState<Set<string>>(new Set());
