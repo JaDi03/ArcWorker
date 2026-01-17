@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAccount, useDisconnect, useConnect } from 'wagmi';
 import { useRouter, usePathname } from 'next/navigation';
+import { AuthModule } from '@/arcworker-sdk/auth';
 
 import { ArcWorkerCardLogo } from './ui/BrandAssets';
 import WalletDashboardModal from './WalletDashboardModal';
@@ -54,11 +55,9 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
 
 
     const handleLogout = () => {
-        localStorage.removeItem('arc_user');
-        localStorage.removeItem('arc_session_token');
-        localStorage.removeItem('arc_encryption_key');
+        AuthModule.clearAllSessions();
         disconnect();
-        router.push('/');
+        window.location.href = '/'; // Full reload to clear all state
     };
 
     useEffect(() => {

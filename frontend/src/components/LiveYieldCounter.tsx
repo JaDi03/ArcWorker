@@ -134,14 +134,25 @@ export function LiveYieldCounter({ address }: LiveYieldCounterProps) {
 
     const [userRole, setUserRole] = useState<'worker' | 'agency' | 'developer' | null>(null);
 
+    // React to address changes immediately
     useEffect(() => {
-        const saved = localStorage.getItem('arc_user');
-        if (saved) {
-            try {
-                const p = JSON.parse(saved);
-                setUserRole(p.role);
-            } catch (e) { }
-        }
+        setNow(Date.now());
+    }, [address]);
+
+    useEffect(() => {
+        const syncProfile = () => {
+            const saved = localStorage.getItem('arc_user');
+            if (saved) {
+                try {
+                    const p = JSON.parse(saved);
+                    setUserRole(p.role);
+                } catch (e) { }
+            }
+        };
+        syncProfile();
+        // Also listen for potential role switches in the same session
+        window.addEventListener('storage', syncProfile);
+        return () => window.removeEventListener('storage', syncProfile);
     }, []);
 
     const handleWithdrawYield = async () => {

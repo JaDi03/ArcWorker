@@ -16,6 +16,11 @@ export const AgencyDashboard: React.FC = () => {
     const { address: userAddress, isConnected } = useAccount();
     const [circleAddress, setCircleAddress] = useState<string | undefined>();
 
+    // Reset Circle state on account switch
+    useEffect(() => {
+        setCircleAddress(undefined);
+    }, [userAddress, isConnected]);
+
     // Get Circle wallet address if logged in
     useEffect(() => {
         const fetchCircleAddress = async () => {
@@ -33,16 +38,19 @@ export const AgencyDashboard: React.FC = () => {
 
                     // Handle Session Expired (401)
                     if (res.status === 401) {
-                        const userId = JSON.parse(circleUser).id || circleUser;
-                        const session = await ensureCircleSession(userId);
-                        if (session) {
-                            currentToken = session.userToken;
-                            res = await fetch('/api/circle/wallet', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userToken: currentToken })
-                            });
-                        }
+                        try {
+                            const parsed = JSON.parse(circleUser);
+                            const userId = parsed.id || parsed.userId || circleUser;
+                            const session = await ensureCircleSession(userId);
+                            if (session) {
+                                currentToken = session.userToken;
+                                res = await fetch('/api/circle/wallet', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userToken: currentToken })
+                                });
+                            }
+                        } catch (e) { }
                     }
 
                     const data = await res.json();
@@ -59,7 +67,7 @@ export const AgencyDashboard: React.FC = () => {
         };
 
         fetchCircleAddress();
-    }, [userAddress, isConnected]); // Re-fetch if wallet changes
+    }, [userAddress, isConnected]);
 
     // Soporte para múltiples direcciones (MetaMask + Circle)
     const combinedAddresses = useMemo(() => {

@@ -45,7 +45,21 @@ export default function WorkerDashboard() {
     useEffect(() => {
         setLiquidBalance(0);
         setLiveYield('0.000000');
-    }, [address]);
+        // Sync with localStorage in case of cross-tab or non-reload login
+        if (typeof window !== 'undefined') {
+            const stored = localStorage.getItem('arc_user');
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    const currentStoredAddr = parsed.address || parsed.walletAddress;
+                    if (currentStoredAddr?.toLowerCase() !== user?.address?.toLowerCase()) {
+                        setUser(parsed);
+                        if (currentStoredAddr) setCircleAddress(currentStoredAddr);
+                    }
+                } catch (e) { }
+            }
+        }
+    }, [address, user?.address]);
 
     const { data: eoaBalanceData, refetch: refetchWagmiBalance } = useReadContract({
         address: CONTRACTS.USDC.address as `0x${string}`,
