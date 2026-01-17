@@ -357,11 +357,11 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                         <div className="mt-4 pt-4 border-t border-gray-800">
                             <div className="bg-gray-800 p-2 rounded-lg border border-gray-700 mb-3 opacity-80 group/guide relative">
                                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Box Guide</p>
-                                <div className="relative cursor-zoom-in" onClick={() => setExpandedImage(config.exampleImageUrl || "/ner_guide.png")}>
+                                <div className="relative cursor-zoom-in" onClick={() => setExpandedImage(config.exampleImageUrl || "/bbox_tips_preview_1768020935499.png")}>
                                     <img
-                                        src={config.exampleImageUrl || "/ner_guide.png"}
+                                        src={config.exampleImageUrl || "/bbox_tips_preview_1768020935499.png"}
                                         className="w-full rounded border border-gray-600 mb-2 object-cover"
-                                        alt="NER Guide"
+                                        alt="Bounding Box Guide"
                                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                     />
                                     <div className="absolute inset-0 bg-black/0 group-hover/guide:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/guide:opacity-100">
