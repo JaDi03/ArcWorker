@@ -261,17 +261,26 @@ export const AgencyDashboard: React.FC = () => {
         }
     };
 
-    const handleCancelCampaign = async (campaignTitle: string) => {
+    const handleCancelCampaign = async (campaignTitle: string, campaignMetadataHash?: string) => {
         const titleForDisplay = campaignTitle || 'Untitled Campaign';
         if (!window.confirm(`Are you sure you want to cancel all "Created" tasks in "${titleForDisplay}"? This will refund the deposit to your Savings.`)) return;
 
         setIsReviewing(true);
         try {
-            // Find all tasks with this title that are in status 0 (Created)
-            const tasksToCancel = agencyTasks.filter((t: any) =>
-                (t.title === campaignTitle || (!t.title && campaignTitle === 'Untitled Campaign')) &&
-                t.status === 0
-            );
+            // Find all tasks with this campaign that are in status 0 (Created)
+            const tasksToCancel = agencyTasks.filter((t: any) => {
+                if (t.status !== 0) return false; // Must be Created status
+
+                // Match by metadataHash if available
+                if (campaignMetadataHash && t.metadataHash && t.metadataHash === campaignMetadataHash) return true;
+                // Fallback: match by normalized title
+                const taskTitle = t.title?.trim()?.toLowerCase();
+                const targetTitle = campaignTitle?.trim()?.toLowerCase();
+                if (taskTitle && targetTitle && taskTitle === targetTitle) return true;
+                // Handle "Untitled Campaign" case
+                if (!t.title && campaignTitle === 'Untitled Campaign') return true;
+                return false;
+            });
 
             if (tasksToCancel.length === 0) {
                 alert("No cancelable tasks found in this campaign (they might be submitted or completed).");
@@ -565,24 +574,44 @@ export const AgencyDashboard: React.FC = () => {
                                     <div>
                                         <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 tracking-wider">Campaign Tasks (IDs)</h4>
                                         <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
-                                            {agencyTasks
-                                                .filter((t: any) => (t.title === selectedCampaign.title || (!t.title && selectedCampaign.title === 'Untitled Campaign')))
-                                                .sort((a: any, b: any) => Number(b.id) - Number(a.id))
-                                                .map((t: any) => (
-                                                    <div
-                                                        key={t.id}
-                                                        title={`Status: ${t.status === 0 ? 'Open' : t.status === 1 ? 'Submitted' : t.status === 4 ? 'Cancelled' : 'Closed'}`}
-                                                        className={`px-2 py-1 rounded text-xs font-mono border flex items-center gap-1 cursor-help
-                                                            ${t.status === 0 ? 'bg-green-50 text-green-700 border-green-200' :
-                                                                t.status === 1 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                                                    t.status === 4 ? 'bg-red-50 text-red-400 border-red-100 decoration-line-through' :
-                                                                        'bg-gray-50 text-gray-500 border-gray-200'}
-                                                        `}
-                                                    >
-                                                        #{t.id}
-                                                    </div>
-                                                ))
-                                            }
+                                            {(() => {
+                                                // More robust matching: use metadataHash first, then title
+                                                const campaignHash = selectedCampaign.metadata?.metadataHash;
+                                                const campaignTitle = selectedCampaign.title;
+
+                                                const matchingTasks = agencyTasks.filter((t: any) => {
+                                                    // Match by metadataHash if available
+                                                    if (campaignHash && t.metadataHash && t.metadataHash === campaignHash) return true;
+                                                    // Fallback: match by normalized title
+                                                    const taskTitle = t.title?.trim()?.toLowerCase();
+                                                    const targetTitle = campaignTitle?.trim()?.toLowerCase();
+                                                    if (taskTitle && targetTitle && taskTitle === targetTitle) return true;
+                                                    // Handle "Untitled Campaign" case
+                                                    if (!t.title && campaignTitle === 'Untitled Campaign') return true;
+                                                    return false;
+                                                });
+
+                                                if (matchingTasks.length === 0) {
+                                                    return <span className="text-gray-400 text-xs italic">No tasks found for this campaign</span>;
+                                                }
+
+                                                return matchingTasks
+                                                    .sort((a: any, b: any) => Number(b.id) - Number(a.id))
+                                                    .map((t: any) => (
+                                                        <div
+                                                            key={t.id}
+                                                            title={`Status: ${t.status === 0 ? 'Open' : t.status === 1 ? 'Submitted' : t.status === 4 ? 'Cancelled' : 'Closed'}`}
+                                                            className={`px-2 py-1 rounded text-xs font-mono border flex items-center gap-1 cursor-help
+                                                                ${t.status === 0 ? 'bg-green-50 text-green-700 border-green-200' :
+                                                                    t.status === 1 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                                                        t.status === 4 ? 'bg-red-50 text-red-400 border-red-100 line-through' :
+                                                                            'bg-gray-50 text-gray-500 border-gray-200'}
+                                                            `}
+                                                        >
+                                                            #{t.id}
+                                                        </div>
+                                                    ));
+                                            })()}
                                         </div>
                                     </div>
 
@@ -593,7 +622,7 @@ export const AgencyDashboard: React.FC = () => {
                                         </div>
                                         <button
                                             onClick={() => {
-                                                handleCancelCampaign(selectedCampaign.title);
+                                                handleCancelCampaign(selectedCampaign.title, selectedCampaign.metadata?.metadataHash);
                                                 setSelectedCampaign(null);
                                             }}
                                             className="px-4 py-2 bg-red-50 text-red-600 text-sm font-bold rounded-lg hover:bg-red-100 transition"
