@@ -203,28 +203,36 @@ export default function DesignPreview() {
                                 ))}
                             </ul>
 
-                            <div className="relative group/btn">
-                                <button
-                                    disabled={process.env.NODE_ENV !== 'development'}
-                                    onClick={() => process.env.NODE_ENV === 'development' && openAuth('register', 'agency')}
-                                    className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all 
-                                        ${process.env.NODE_ENV === 'development'
-                                            ? 'bg-white text-[#2874ca] border-2 border-[#2874ca] hover:bg-blue-50 cursor-pointer group-hover:scale-[1.02]'
-                                            : 'bg-white text-gray-400 border-2 border-gray-200 cursor-not-allowed'}`}
-                                >
-                                    Create Campaign <ArrowRight size={20} />
-                                </button>
-                                {process.env.NODE_ENV !== 'development' && (
-                                    <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-bold py-2 px-3 rounded shadow-lg opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                        🚧 Private Beta: Invitation Only
+                            {/* Admin access: Add ?admin=arcworker2025 to URL to enable Agency */}
+                            {(() => {
+                                const isAdminMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('admin') === 'arcworker2025';
+                                const canCreateCampaign = process.env.NODE_ENV === 'development' || isAdminMode;
+
+                                return (
+                                    <div className="relative group/btn">
+                                        <button
+                                            disabled={!canCreateCampaign}
+                                            onClick={() => canCreateCampaign && openAuth('register', 'agency')}
+                                            className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all 
+                                                ${canCreateCampaign
+                                                    ? 'bg-white text-[#2874ca] border-2 border-[#2874ca] hover:bg-blue-50 cursor-pointer group-hover:scale-[1.02]'
+                                                    : 'bg-white text-gray-400 border-2 border-gray-200 cursor-not-allowed'}`}
+                                        >
+                                            Create Campaign <ArrowRight size={20} />
+                                        </button>
+                                        {!canCreateCampaign && (
+                                            <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-bold py-2 px-3 rounded shadow-lg opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                🚧 Private Beta: Invitation Only
+                                            </div>
+                                        )}
+                                        {canCreateCampaign && (
+                                            <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-mono">
+                                                {isAdminMode ? 'ADMIN MODE' : 'DEV MODE'}
+                                            </span>
+                                        )}
                                     </div>
-                                )}
-                                {process.env.NODE_ENV === 'development' && (
-                                    <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-mono">
-                                        DEV MODE: ENABLED
-                                    </span>
-                                )}
-                            </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
