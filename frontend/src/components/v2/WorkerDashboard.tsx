@@ -78,7 +78,7 @@ export default function WorkerDashboard() {
     }, [circleAddress]);
 
     // 1. Data Fetching
-    const { tasks: allTasks, isLoading: tasksLoading } = useTasks(undefined, address);
+    const { tasks: allTasks, isLoading: tasksLoading, refetch: refetchTasks } = useTasks(undefined, address);
 
     const { data: savingsShares, refetch: refetchShares } = useReadContract({
         address: CONTRACTS.TaskEscrow.address,
@@ -206,9 +206,9 @@ export default function WorkerDashboard() {
             alert("Withdrawal successful! Funds added to your wallet.");
             refetchShares();
             refetchWagmiBalance();
-            // Force Circle refresh if needed (though this is EOA path)
+            refetchTasks(); // Added to ensure earnings stats refresh
         }
-    }, [isWithdrawSuccess, refetchShares, refetchWagmiBalance]);
+    }, [isWithdrawSuccess, refetchShares, refetchWagmiBalance, refetchTasks]);
 
     const handleWithdraw = async () => {
         if (stats.totalSavings <= 0) return;

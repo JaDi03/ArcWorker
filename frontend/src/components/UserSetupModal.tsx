@@ -265,6 +265,7 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
             setIsOnChainRegistering(false);
             onComplete(userData);
             onClose();
+            window.location.reload(); // Force full app reset
         } catch (err: any) {
             console.error("Registration failed:", err);
             setIsOnChainRegistering(false);
@@ -358,6 +359,7 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
             localStorage.setItem('arc_user', JSON.stringify(user));
             onComplete(user);
             onClose();
+            window.location.reload(); // Force full app reset
         } catch (err: any) {
             console.error("Login Error Details:", err.response?.data || err.message);
             const serverError = err.response?.data?.error;

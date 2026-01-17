@@ -18,7 +18,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { WorkerTaskInterface, TaskData, TaskConfig } from './WorkerTaskInterface';
 import { useTasks } from '@/hooks/useTasks';
-import { useAccount, useWriteContract } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { CONTRACTS } from '@/utils/contracts';
 import { getSdk } from '@/utils/circle';
 
@@ -344,7 +344,22 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
     };
 
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const { writeContractAsync: writeSubmit } = useWriteContract();
+    const { writeContractAsync: writeSubmit, data: submitHash } = useWriteContract();
+
+    // NEW: Wait for transaction on-chain confirmation
+    const { isLoading: isSubmitConfirming, isSuccess: isSubmitConfirmed } = useWaitForTransactionReceipt({
+        hash: submitHash
+    });
+
+    // Handle auto-refetch when transaction is confirmed
+    useEffect(() => {
+        if (isSubmitConfirmed) {
+            console.log("[WorkerFeed] Submission confirmed on-chain, refetching tasks...");
+            refetch();
+            setIsSubmitting(false);
+            setSelectedTask(null);
+        }
+    }, [isSubmitConfirmed]);
 
     const handleSubmission = async (result: any) => {
         if (!selectedTask) return;
@@ -402,20 +417,12 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
                 setRecentlySubmitted(prev => {
                     const next = new Set(prev);
                     next.add(selectedTask.id);
-                    if (selectedTask.groupKey) {
-                        next.add(selectedTask.groupKey);
-                        console.log(`[Worker Feed] ✅ EOA: Blocked campaign group: "${selectedTask.groupKey}"`);
-                    }
+                    if (selectedTask.groupKey) next.add(selectedTask.groupKey);
                     if (selectedTask.metadata?.metadataHash) next.add(selectedTask.metadata.metadataHash);
-                    console.log(`[Worker Feed] 🚫 Task #${selectedTask.id} marked as participated`);
-                    console.log(`[Worker Feed] 📋 Cache now contains ${next.size} entries:`, Array.from(next).slice(0, 5));
                     return next;
                 });
                 markAsParticipated(selectedTask.id); // Force persistent removal
-                refetch(); // Trigger background refresh
-
-                setSelectedTask(null);
-                updateUrl(null);
+                // refetch() and cleanup happen in useEffect [isSubmitConfirmed]
                 return;
             }
 

@@ -6,7 +6,7 @@ import { AgencySettings } from './AgencySettings';
 import { TaskAnswerViewer } from './TaskAnswerViewer';
 import WalletDashboardModal from '../WalletDashboardModal';
 import { useTasks } from '@/hooks/useTasks';
-import { useAccount, useWriteContract } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { CONTRACTS } from '@/utils/contracts';
 import { getSdk } from '@/utils/circle';
 import { ensureCircleSession } from '@/utils/circleSession';
@@ -171,7 +171,22 @@ export const AgencyDashboard: React.FC = () => {
 
     const [selectedReview, setSelectedReview] = useState<any>(null);
     const [isReviewing, setIsReviewing] = useState(false);
-    const { writeContractAsync: writeAgencyAction } = useWriteContract();
+    const { writeContractAsync: writeAgencyAction, data: actionHash } = useWriteContract();
+
+    // NEW: Wait for transaction on-chain confirmation
+    const { isLoading: isActionConfirming, isSuccess: isActionConfirmed } = useWaitForTransactionReceipt({
+        hash: actionHash
+    });
+
+    // Handle auto-refetch when transaction is confirmed
+    useEffect(() => {
+        if (isActionConfirmed) {
+            console.log("[AgencyDashboard] Action confirmed on-chain, refetching tasks...");
+            refetch();
+            setSelectedReview(null);
+            setIsReviewing(false);
+        }
+    }, [isActionConfirmed]);
 
     const handleAgencyAction = async (action: 'approve' | 'reject') => {
         if (!selectedReview) return;
@@ -188,9 +203,7 @@ export const AgencyDashboard: React.FC = () => {
                     functionName: action === 'approve' ? 'approveTask' : 'rejectTask',
                     args: [BigInt(taskId)],
                 });
-                alert(`Task ${action === 'approve' ? 'Approved' : 'Rejected'} successfully via Wallet!`);
-                refetch();
-                setSelectedReview(null);
+                // Note: isActionConfirmed useEffect handles refetch and cleanup
                 return;
             }
 
@@ -235,8 +248,6 @@ export const AgencyDashboard: React.FC = () => {
                 alert(`Task ${action === 'approve' ? 'Approved' : 'Rejected'} successfully via Circle!`);
                 refetch();
                 setSelectedReview(null);
-            } else {
-                alert("Please connect a wallet or sign in to perform this action.");
             }
 
         } catch (err: any) {
@@ -257,8 +268,9 @@ export const AgencyDashboard: React.FC = () => {
                 alert(`Action Failed: ${err.message}`);
             }
         } finally {
-            setIsReviewing(false);
+            if (!isConnected) setIsReviewing(false);
         }
+
     };
 
     const handleCancelCampaign = async (campaignTitle: string, campaignMetadataHash?: string) => {
@@ -297,6 +309,7 @@ export const AgencyDashboard: React.FC = () => {
                     functionName: 'cancelTasksBatch',
                     args: [taskIds],
                 });
+                // isActionConfirmed handles cleanup
             } else if (circleAddress) {
                 // Use Circle API for Circle wallets - Batch call
                 const circleUser = localStorage.getItem('arc_user');
@@ -346,8 +359,9 @@ export const AgencyDashboard: React.FC = () => {
             console.error(err);
             alert(`Cancellation Failed: ${err.message || err.shortMessage || 'Unknown error'}`);
         } finally {
-            setIsReviewing(false);
+            if (!isConnected) setIsReviewing(false);
         }
+
     };
 
     useEffect(() => {
