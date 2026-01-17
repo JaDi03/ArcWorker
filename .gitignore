@@ -55,9 +55,8 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-docs/
-
-
+# docs/ folder allowed for GitBook
+# docs/
 
 # Internal Strategy Docs
 agentic_commerce_strategy.md
