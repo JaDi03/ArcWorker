@@ -73,7 +73,15 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Identity Missing' }, { status: 400 });
         }
 
-        // ... (finding funded wallet remains)
+        // CRITICAL: Ensure we have a valid session BEFORE wallet operations
+        if (!sessionToken || !await verifyCircleSession(sessionToken, bridgedId).catch(() => false)) {
+            console.log('[Circle API] Token invalid/expired, creating fresh session...');
+            const session = await createCircleSession(bridgedId);
+            sessionToken = session.userToken;
+            sessionKey = session.encryptionKey;
+        }
+
+        // ... (finding funded wallet with VALID token)
         let walletResult = await findFundedWallet(sessionToken, amountStr);
         const { wallet, balances } = walletResult;
 
