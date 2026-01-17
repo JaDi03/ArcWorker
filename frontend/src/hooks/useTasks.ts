@@ -149,18 +149,23 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
         }
     });
 
-    // CACHE PARTICIPATIONS TO PREVENT FLICKER (ID-BASED MAP)
-    const [participationMap, setParticipationMap] = useState<Record<string, boolean>>(() => {
-        if (typeof window !== 'undefined') {
+    // CACHE PARTICIPATIONS TO PREVENT FLICKER (USER-SPECIFIC)
+    const [participationMap, setParticipationMap] = useState<Record<string, boolean>>({});
+
+    // Effect to handle user-specific cache loading and isolation
+    useEffect(() => {
+        if (typeof window !== 'undefined' && workerAddress) {
             try {
-                const stored = localStorage.getItem('arc_participation_cache');
-                return stored ? JSON.parse(stored) : {};
+                const cacheKey = `arc_participation_cache_${workerAddress.toLowerCase()}`;
+                const stored = localStorage.getItem(cacheKey);
+                setParticipationMap(stored ? JSON.parse(stored) : {});
             } catch (e) {
-                return {};
+                setParticipationMap({});
             }
+        } else if (!workerAddress) {
+            setParticipationMap({});
         }
-        return {};
-    });
+    }, [workerAddress]);
 
     useEffect(() => {
         if (participations && rawProcessedTasks.length > 0 && participations.length === rawProcessedTasks.length) {
@@ -186,14 +191,15 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
                     }
                 });
 
-                if (hasChanges) {
-                    localStorage.setItem('arc_participation_cache', JSON.stringify(next));
+                if (hasChanges && workerAddress) {
+                    const cacheKey = `arc_participation_cache_${workerAddress.toLowerCase()}`;
+                    localStorage.setItem(cacheKey, JSON.stringify(next));
                     return next;
                 }
                 return prev;
             });
         }
-    }, [participations, rawProcessedTasks]);
+    }, [participations, rawProcessedTasks, workerAddress]);
 
     const allTasks = useMemo(() => {
         return rawProcessedTasks.map((t) => ({
@@ -220,10 +226,12 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
     };
 
     const markAsParticipated = (taskId: string | number) => {
+        if (!workerAddress) return;
         const idStr = taskId.toString();
+        const cacheKey = `arc_participation_cache_${workerAddress.toLowerCase()}`;
         setParticipationMap(prev => {
             const next = { ...prev, [idStr]: true };
-            localStorage.setItem('arc_participation_cache', JSON.stringify(next));
+            localStorage.setItem(cacheKey, JSON.stringify(next));
             return next;
         });
     };

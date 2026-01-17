@@ -130,6 +130,11 @@ export class AuthModule {
 
     public static clearAllSessions() {
         if (typeof localStorage === 'undefined') return;
-        this.STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
+        // Aggressive cleanup: remove EVERYTHING starting with arc_
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('arc_')) {
+                localStorage.removeItem(key);
+            }
+        });
     }
 }

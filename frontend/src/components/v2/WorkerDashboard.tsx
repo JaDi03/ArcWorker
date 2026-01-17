@@ -40,6 +40,13 @@ export default function WorkerDashboard() {
     // 0. Liquid Balance Fetching
     const [liquidBalance, setLiquidBalance] = useState(0);
     const [liveYield, setLiveYield] = useState<string>('0.000000');
+
+    // Reset balances immediately when address changes to prevent data leak from previous session
+    useEffect(() => {
+        setLiquidBalance(0);
+        setLiveYield('0.000000');
+    }, [address]);
+
     const { data: eoaBalanceData, refetch: refetchWagmiBalance } = useReadContract({
         address: CONTRACTS.USDC.address as `0x${string}`,
         abi: CONTRACTS.USDC.abi,

@@ -127,23 +127,32 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
-    // Local blacklist for immediate feedback, persisted to localStorage to prevent regression on reload
-    const [recentlySubmitted, setRecentlySubmitted] = useState<Set<string>>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('arc_submitted_tasks');
-            if (saved) return new Set(JSON.parse(saved));
-        }
-        return new Set();
-    });
+    // Local blacklist for immediate feedback, persisted per-user to localStorage
+    const [recentlySubmitted, setRecentlySubmitted] = useState<Set<string>>(new Set());
 
-    // Persist changes to localStorage
+    // Load user-specific submission cache
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const cacheValue = JSON.stringify(Array.from(recentlySubmitted));
-            localStorage.setItem('arc_submitted_tasks', cacheValue);
-            console.log('[Worker Feed] 💾 Saved to localStorage:', cacheValue.substring(0, 200) + '...');
+        if (typeof window !== 'undefined' && userAddress) {
+            const cacheKey = `arc_submitted_tasks_${userAddress.toLowerCase()}`;
+            const saved = localStorage.getItem(cacheKey);
+            if (saved) {
+                setRecentlySubmitted(new Set(JSON.parse(saved)));
+            } else {
+                setRecentlySubmitted(new Set());
+            }
+        } else if (!userAddress) {
+            setRecentlySubmitted(new Set());
         }
-    }, [recentlySubmitted]);
+    }, [userAddress]);
+
+    // Persist changes to user-specific localStorage
+    useEffect(() => {
+        if (typeof window !== 'undefined' && userAddress && recentlySubmitted.size > 0) {
+            const cacheKey = `arc_submitted_tasks_${userAddress.toLowerCase()}`;
+            const cacheValue = JSON.stringify(Array.from(recentlySubmitted));
+            localStorage.setItem(cacheKey, cacheValue);
+        }
+    }, [recentlySubmitted, userAddress]);
 
     // URL Synchronization Helper
     const router = useRouter();
