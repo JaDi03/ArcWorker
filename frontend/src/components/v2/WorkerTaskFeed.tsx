@@ -164,12 +164,26 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
         const now = Math.floor(Date.now() / 1000);
         const currentUserLower = userAddress?.toLowerCase();
 
-        // Helper to determine unique campaign identifier
+        // Helper to determine unique campaign identifier - MODIFIED TO BE MORE ROBUST
         const getGroupKey = (t: any) => {
-            if (t.metadataHash && t.metadataHash.length > 2) return t.metadataHash;
-            // Fallback: Group by Title + Agency to prevent unrelated tasks from mixing
-            if (t.title && t.title !== 'Unknown') return `${t.title}-${t.agency}`;
-            return `single-${t.id}`; // Treating specific tasks as their own group if no data
+            // Priority 0: Explicit campaign ID if we adds it later
+            if (t.campaignId) return t.campaignId.toString();
+
+            // Priority 1: Cleaned Title + Agency (Most stable)
+            const cleanTitle = (t.title || 'Untitled').trim().toLowerCase();
+            const agency = (t.agency || 'Unknown').toLowerCase();
+
+            if (cleanTitle !== 'unknown' && cleanTitle !== 'untitled') {
+                return `campaign-${cleanTitle}-${agency}`;
+            }
+
+            // Priority 2: metadataHash if it's a real hash or long enough JSON
+            if (t.metadataHash && t.metadataHash.length > 5) {
+                // Return first 100 chars to avoid huge keys but maintain uniqueness
+                return `hash-${t.metadataHash.substring(0, 100)}`;
+            }
+
+            return `single-${t.id}`; // Fallback: Individual task
         };
 
         // 1. Identify campaigns where the current worker has already participated
@@ -178,14 +192,16 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
         if (currentUserLower) {
             rawTasks.forEach((t: any) => {
                 const groupKey = getGroupKey(t);
+                const idStr = t.id.toString();
 
                 // Check if User Participated (RPC) OR Locally Submitted (Cache)
                 const isParticipated = t.hasParticipated ||
-                    recentlySubmitted.has(t.metadataHash) ||
-                    recentlySubmitted.has(t.id.toString());
+                    recentlySubmitted.has(idStr) ||
+                    (t.metadataHash && recentlySubmitted.has(t.metadataHash));
 
                 if (isParticipated) {
                     participatedGroups.add(groupKey);
+                    console.log(`[Worker Feed] User already participated in group: ${groupKey} (Task #${idStr})`);
                 }
             });
         }
