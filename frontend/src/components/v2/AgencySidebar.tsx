@@ -1,6 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, Layers, Users, Settings, LogOut, CheckSquare } from 'lucide-react';
 import { ArcWorkerCardLogo } from '@/components/ui/BrandAssets';
+import { AuthModule } from '@/arcworker-sdk/auth';
 
 type Page = 'overview' | 'campaigns' | 'workforce' | 'settings' | 'review';
 
@@ -76,10 +77,7 @@ export const AgencySidebar: React.FC<AgencySidebarProps> = ({ activePage, onNavi
                 </div>
                 <button
                     onClick={() => {
-                        // Limpiar TODA la sesión y caché
-                        Object.keys(localStorage).forEach(key => {
-                            if (key.startsWith('arc_')) localStorage.removeItem(key);
-                        });
+                        AuthModule.clearAllSessions();
                         window.location.href = '/';
                     }}
                     className="flex items-center px-2 py-2 text-white/70 hover:bg-white/10 hover:text-white rounded-lg transition text-xs font-bold uppercase tracking-wide w-full justify-center"

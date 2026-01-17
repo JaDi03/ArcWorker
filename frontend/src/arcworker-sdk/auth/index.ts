@@ -103,6 +103,18 @@ export class AuthModule {
         return this.pollAddress();
     }
 
+    private static readonly STORAGE_KEYS = [
+        'arc_session_token',
+        'arc_encryption_key',
+        'arc_user',
+        'arc_wallet_address',
+        'arc_circle_user_id',
+        'arc_contacts',
+        'arc_social_pending',
+        'arc_social_user_context',
+        'arc_social_session_data'
+    ];
+
     private setSession(token: string, key: string) {
         this.userToken = token;
         this.encryptionKey = key;
@@ -113,7 +125,11 @@ export class AuthModule {
     public logout() {
         this.userToken = null;
         this.encryptionKey = null;
-        localStorage.removeItem('arc_session_token');
-        localStorage.removeItem('arc_encryption_key');
+        AuthModule.clearAllSessions();
+    }
+
+    public static clearAllSessions() {
+        if (typeof localStorage === 'undefined') return;
+        this.STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
     }
 }

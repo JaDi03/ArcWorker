@@ -7,6 +7,7 @@ import { formatUnits, parseEther, parseUnits } from 'viem';
 import { WorkerTaskFeed } from './WorkerTaskFeed';
 import WalletDashboardModal from '@/components/WalletDashboardModal';
 import { ArcWorkerCardLogo } from '@/components/ui/BrandAssets';
+import { AuthModule } from '@/arcworker-sdk/auth';
 
 export default function WorkerDashboard() {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'market' | 'history' | 'investments'>('dashboard');
@@ -348,7 +349,7 @@ export default function WorkerDashboard() {
                     <div className="mt-auto pt-4">
                         <button
                             onClick={() => {
-                                localStorage.removeItem('arc_user');
+                                AuthModule.clearAllSessions();
                                 window.location.href = '/';
                             }}
                             className="flex items-center w-full px-4 py-3 text-white/70 hover:bg-white/10 hover:text-white rounded-lg transition font-medium"

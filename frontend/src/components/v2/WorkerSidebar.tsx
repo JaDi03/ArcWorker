@@ -1,5 +1,6 @@
 import React from 'react';
 import { LayoutDashboard, ClipboardCheck, History, Wallet, Settings, LogOut, Search } from 'lucide-react';
+import { AuthModule } from '@/arcworker-sdk/auth';
 
 type WorkerPage = 'dashboard' | 'market' | 'submissions' | 'earnings' | 'settings';
 
@@ -33,31 +34,31 @@ export const WorkerSidebar: React.FC<WorkerSidebarProps> = ({ activePage, onNavi
             <nav className="flex-1 p-4 space-y-1">
                 <button
                     onClick={() => onNavigate('dashboard')}
-                    className={`nav-item w-full flex items-center px-4 py-3 rounded-lg transition ${activePage === 'dashboard' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'}`}
+                    className={`nav - item w - full flex items - center px - 4 py - 3 rounded - lg transition ${activePage === 'dashboard' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'} `}
                 >
                     <LayoutDashboard className="w-5 h-5 mr-3" /> Dashboard
                 </button>
                 <button
                     onClick={() => onNavigate('market')}
-                    className={`nav-item w-full flex items-center px-4 py-3 rounded-lg transition ${activePage === 'market' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'}`}
+                    className={`nav - item w - full flex items - center px - 4 py - 3 rounded - lg transition ${activePage === 'market' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'} `}
                 >
                     <Search className="w-5 h-5 mr-3" /> Task Market
                 </button>
                 <button
                     onClick={() => onNavigate('submissions')}
-                    className={`nav-item w-full flex items-center px-4 py-3 rounded-lg transition ${activePage === 'submissions' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'}`}
+                    className={`nav - item w - full flex items - center px - 4 py - 3 rounded - lg transition ${activePage === 'submissions' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'} `}
                 >
                     <ClipboardCheck className="w-5 h-5 mr-3" /> My Submissions
                 </button>
                 <button
                     onClick={() => onNavigate('earnings')}
-                    className={`nav-item w-full flex items-center px-4 py-3 rounded-lg transition ${activePage === 'earnings' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'}`}
+                    className={`nav - item w - full flex items - center px - 4 py - 3 rounded - lg transition ${activePage === 'earnings' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'} `}
                 >
                     <History className="w-5 h-5 mr-3" /> Earnings History
                 </button>
                 <button
                     onClick={() => onNavigate('settings')}
-                    className={`nav-item w-full flex items-center px-4 py-3 rounded-lg transition ${activePage === 'settings' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'}`}
+                    className={`nav - item w - full flex items - center px - 4 py - 3 rounded - lg transition ${activePage === 'settings' ? 'bg-gray-800 text-white' : 'hover:bg-gray-800 hover:text-white'} `}
                 >
                     <Settings className="w-5 h-5 mr-3" /> Settings
                 </button>
@@ -82,7 +83,7 @@ export const WorkerSidebar: React.FC<WorkerSidebarProps> = ({ activePage, onNavi
                 </div>
                 <button
                     onClick={() => {
-                        localStorage.removeItem('arc_user');
+                        AuthModule.clearAllSessions();
                         window.location.href = '/';
                     }}
                     className="flex items-center px-2 py-2 text-red-400 hover:bg-gray-800 rounded-lg transition text-xs font-bold uppercase tracking-wide w-full"

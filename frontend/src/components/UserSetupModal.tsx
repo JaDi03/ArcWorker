@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useArcWorkerWallet } from '@/arcworker-sdk/wallet';
+import { AuthModule } from '@/arcworker-sdk/auth';
 import { useConnect, useAccount } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import axios from 'axios';
@@ -163,7 +164,13 @@ export function UserSetupModal({ isOpen, onClose, onComplete, initialMode = 'reg
         }
     };
 
+    const handleStartEnrollment = () => {
+        AuthModule.clearAllSessions();
+        setCurrentStep('wallet');
+    };
+
     const handleMetamaskLogin = () => {
+        AuthModule.clearAllSessions();
         setAuthError(null);
         const injectedConnector = connectors.find(c => c.id === 'injected');
         if (injectedConnector) {

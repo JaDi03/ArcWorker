@@ -9,6 +9,7 @@ import { ArcWorkerCardLogo } from './ui/BrandAssets';
 import RevenueWithdrawModal from './RevenueWithdrawModal';
 import UsernameRegistrationModal from './UsernameRegistrationModal';
 import WalletDashboardModal from './WalletDashboardModal';
+import { AuthModule } from '@/arcworker-sdk/auth';
 
 const navigation = [
     { name: 'Platform Overview', href: '/admin' },
@@ -47,9 +48,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }, [isConnected, profile]);
 
     const handleLogout = () => {
-        localStorage.removeItem('arc_user');
-        localStorage.removeItem('arc_session_token');
-        localStorage.removeItem('arc_encryption_key');
+        AuthModule.clearAllSessions();
         disconnect();
         router.push('/');
     };
