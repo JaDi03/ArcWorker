@@ -3,6 +3,7 @@ import { Download, Plus, TrendingUp, ScanLine, MoreHorizontal, Check, X as XIcon
 import { useRouter } from 'next/navigation';
 import { AgencySidebar } from './AgencySidebar';
 import { AgencySettings } from './AgencySettings';
+import { AgencyWorkforce } from './AgencyWorkforce';
 import { TaskAnswerViewer } from './TaskAnswerViewer';
 import WalletDashboardModal from '../WalletDashboardModal';
 import { useTasks } from '@/hooks/useTasks';
@@ -78,7 +79,7 @@ export const AgencyDashboard: React.FC = () => {
     }, [userAddress, circleAddress]);
 
     const { tasks: agencyTasks, isLoading, refetch, allTasksCount, readError, actualContractCount } = useTasks(combinedAddresses);
-    const [activeView, setActiveView] = useState<'overview' | 'review' | 'settings'>('overview');
+    const [activeView, setActiveView] = useState<'overview' | 'review' | 'settings' | 'workforce'>('overview');
     const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
     const [isWalletOpen, setIsWalletOpen] = useState(false);
 
@@ -381,6 +382,7 @@ export const AgencyDashboard: React.FC = () => {
     const handleNavigate = (page: string) => {
         if (page === 'review') setActiveView('review');
         else if (page === 'settings') setActiveView('settings');
+        else if (page === 'workforce') setActiveView('workforce');
         else setActiveView('overview');
     };
 
@@ -393,12 +395,26 @@ export const AgencyDashboard: React.FC = () => {
         );
     }
 
+    if (activeView === 'workforce') {
+        return (
+            <div className="flex h-screen overflow-hidden bg-gray-100 font-sans">
+                {/* Note: AgencyWorkforce currently has its own Sidebar instance. 
+                    In a future refactor, we should hoist the Sidebar to a layout component 
+                    to avoid re-mounting it when switching views. For now, this works. */}
+                <AgencyWorkforce onNavigate={handleNavigate} />
+            </div>
+        );
+    }
+
+
+
     return (
         <div className="flex h-screen overflow-hidden bg-gray-100 font-sans">
             <AgencySidebar
                 activePage={activeView}
                 onNavigate={handleNavigate}
                 onWalletOpen={() => setIsWalletOpen(true)}
+                reviewCount={pendingReviews.length}
             />
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden">

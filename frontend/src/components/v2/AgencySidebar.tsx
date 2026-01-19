@@ -9,9 +9,10 @@ interface AgencySidebarProps {
     activePage: Page;
     onNavigate: (page: Page) => void;
     onWalletOpen?: () => void;
+    reviewCount?: number;
 }
 
-export const AgencySidebar: React.FC<AgencySidebarProps> = ({ activePage, onNavigate, onWalletOpen }) => {
+export const AgencySidebar: React.FC<AgencySidebarProps> = ({ activePage, onNavigate, onWalletOpen, reviewCount = 0 }) => {
     const [user, setUser] = React.useState<any>(null);
 
     React.useEffect(() => {
@@ -31,18 +32,16 @@ export const AgencySidebar: React.FC<AgencySidebarProps> = ({ activePage, onNavi
                 >
                     <LayoutDashboard className="w-5 h-5 mr-3" /> Overview
                 </button>
-                <button
-                    onClick={() => onNavigate('campaigns')}
-                    className={`nav-item w-full flex items-center px-4 py-3 rounded-lg transition font-medium ${activePage === 'campaigns' ? 'bg-white/20 text-white shadow-sm' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
-                >
-                    <Layers className="w-5 h-5 mr-3" /> Campaigns
-                </button>
+                {/* Campaigns merged into Overview as requested */}
+
                 <button
                     onClick={() => onNavigate('review')}
                     className={`nav-item w-full flex items-center px-4 py-3 rounded-lg transition font-medium ${activePage === 'review' ? 'bg-white/20 text-white shadow-sm' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
                 >
                     <CheckSquare className="w-5 h-5 mr-3" /> Review Tasks
-                    <span className="ml-auto bg-white/20 text-white border border-white/20 text-[10px] font-bold px-2 py-0.5 rounded-full">12</span>
+                    {reviewCount > 0 && (
+                        <span className="ml-auto bg-white/20 text-white border border-white/20 text-[10px] font-bold px-2 py-0.5 rounded-full">{reviewCount}</span>
+                    )}
                 </button>
                 <button
                     onClick={() => onNavigate('workforce')}

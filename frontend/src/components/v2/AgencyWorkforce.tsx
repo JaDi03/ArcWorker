@@ -2,12 +2,20 @@ import React, { useState } from 'react';
 import { Plus, Info, Star, Search } from 'lucide-react';
 import { AgencySidebar } from './AgencySidebar';
 
-export const AgencyWorkforce: React.FC = () => {
+interface AgencyWorkforceProps {
+    onNavigate?: (page: string) => void;
+}
+
+export const AgencyWorkforce: React.FC<AgencyWorkforceProps> = ({ onNavigate }) => {
     const [activeTab, setActiveTab] = useState<'top' | 'flagged' | 'groups'>('top');
 
-    // Navigation stub
+    // Navigation wrapper
     const handleNavigate = (page: string) => {
-        // In a real app this would use a router
+        if (onNavigate) {
+            onNavigate(page);
+        } else {
+            console.warn("Navigation handler not provided to AgencyWorkforce");
+        }
     };
 
     return (
