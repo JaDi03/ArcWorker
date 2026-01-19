@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import { ArcWorkerLogo, CircleLogoLanding, ArcNetworkLogo } from '@/components/ui/BrandAssets';
 import { Zap, Globe, Shield, ArrowRight, CheckCircle2, Layout, Users, Wallet, Cpu } from 'lucide-react';
-import { UserSetupModal } from '@/components/UserSetupModal';
+import { UserSetupModalV2 } from '@/components/UserSetupModalV2';
 
 export default function DesignPreview() {
     const router = useRouter();
@@ -45,8 +45,8 @@ export default function DesignPreview() {
 
     return (
         <div className="bg-slate-50 min-h-screen font-sans selection:bg-blue-100 text-slate-900">
-            {/* Auth Modal */}
-            <UserSetupModal
+            {/* Auth Modal V2 (Optimized) */}
+            <UserSetupModalV2
                 isOpen={isAuthModalOpen}
                 onClose={() => setIsAuthModalOpen(false)}
                 initialMode={authMode}
