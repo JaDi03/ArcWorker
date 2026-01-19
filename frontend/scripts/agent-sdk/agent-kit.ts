@@ -7,7 +7,9 @@ const TASK_ESCROW_ABI = [
     { name: "getTask", type: "function", inputs: [{ name: "_id", type: "uint256" }], outputs: [{ type: "tuple", components: [{ name: "id", type: "uint256" }, { name: "agency", type: "address" }, { name: "reward", type: "uint256" }, { name: "depositShares", type: "uint256" }, { name: "deadline", type: "uint256" }, { name: "status", type: "uint8" }, { name: "metadataHash", type: "string" }, { name: "requiredSubmissions", type: "uint256" }, { name: "currentSubmissions", type: "uint256" }, { name: "correctAnswerHash", type: "string" }] }], stateMutability: "view" },
     { name: "taskParticipated", type: "function", inputs: [{ name: "_taskId", type: "uint256" }, { name: "_user", type: "address" }], outputs: [{ type: "bool" }], stateMutability: "view" },
     { name: "submitTask", type: "function", inputs: [{ name: "_taskId", type: "uint256" }, { name: "_metadataHash", type: "string" }], outputs: [], stateMutability: "nonpayable" },
-    { name: "createTasksBatch", type: "function", inputs: [{ name: "_rewardPerTask", type: "uint256" }, { name: "_count", type: "uint256" }, { name: "_deadline", type: "uint256" }, { name: "_metadataHash", type: "string" }, { name: "_requiredSubmissions", type: "uint256" }, { name: "_correctAnswerHash", type: "bytes32" }], outputs: [], stateMutability: "payable" }
+    { name: "createTasksBatch", type: "function", inputs: [{ name: "_rewardPerTask", type: "uint256" }, { name: "_count", type: "uint256" }, { name: "_deadline", type: "uint256" }, { name: "_metadataHash", type: "string" }, { name: "_requiredSubmissions", type: "uint256" }, { name: "_correctAnswerHash", type: "bytes32" }], outputs: [], stateMutability: "payable" },
+    { name: "approveTask", type: "function", inputs: [{ name: "_taskId", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
+    { name: "rejectTask", type: "function", inputs: [{ name: "_taskId", type: "uint256" }], outputs: [], stateMutability: "nonpayable" }
 ] as const;
 
 const USER_REGISTRY_ABI = [
@@ -142,6 +144,28 @@ export class ArcWorkerAgent {
             value: totalValue
         });
 
+        return hash;
+    }
+
+    async approveTask(taskId: number) {
+        console.log(`✅ Approving Task #${taskId}...`);
+        const hash = await this.walletClient.writeContract({
+            address: CONTRACT_ADDRESSES.TaskEscrow,
+            abi: TASK_ESCROW_ABI,
+            functionName: 'approveTask',
+            args: [BigInt(taskId)]
+        });
+        return hash;
+    }
+
+    async rejectTask(taskId: number) {
+        console.log(`❌ Rejecting Task #${taskId}...`);
+        const hash = await this.walletClient.writeContract({
+            address: CONTRACT_ADDRESSES.TaskEscrow,
+            abi: TASK_ESCROW_ABI,
+            functionName: 'rejectTask',
+            args: [BigInt(taskId)]
+        });
         return hash;
     }
 }

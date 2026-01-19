@@ -3,6 +3,8 @@ import { LayoutDashboard, Layers, Users, Settings, LogOut, CheckSquare } from 'l
 import { ArcWorkerCardLogo } from '@/components/ui/BrandAssets';
 import { AuthModule } from '@/arcworker-sdk/auth';
 
+import { useDisconnect } from 'wagmi';
+
 type Page = 'overview' | 'campaigns' | 'workforce' | 'settings' | 'review';
 
 interface AgencySidebarProps {
@@ -14,6 +16,7 @@ interface AgencySidebarProps {
 
 export const AgencySidebar: React.FC<AgencySidebarProps> = ({ activePage, onNavigate, onWalletOpen, reviewCount = 0 }) => {
     const [user, setUser] = React.useState<any>(null);
+    const { disconnect } = useDisconnect();
 
     React.useEffect(() => {
         const stored = localStorage.getItem('arc_user');
@@ -76,6 +79,7 @@ export const AgencySidebar: React.FC<AgencySidebarProps> = ({ activePage, onNavi
                 </div>
                 <button
                     onClick={() => {
+                        disconnect(); // Disconnect Wagmi wallet
                         AuthModule.clearAllSessions();
                         window.location.href = '/';
                     }}

@@ -55,7 +55,17 @@ export function useTasks(addressOrAddresses?: string | string[], workerAddress?:
         const processed = tasksArray
             .filter((t: any) => {
                 const agency = t.agency || t[1];
-                return t && agency && agency !== '0x0000000000000000000000000000000000000000';
+                // 1. Must be valid address
+                if (!t || !agency || agency === '0x0000000000000000000000000000000000000000') return false;
+
+                // 2. PRIVACY FILTER: If filtered addresses are provided, ONLY show tasks belonging to them
+                if (addresses.length > 0) {
+                    const agencyLower = agency.toLowerCase();
+                    const isMyTask = addresses.some(addr => addr.toLowerCase() === agencyLower);
+                    if (!isMyTask) return false;
+                }
+
+                return true;
             })
             .map((t: any, index: number) => {
                 const id = t.id !== undefined ? Number(t.id) : (t[0] !== undefined ? Number(t[0]) : index);
