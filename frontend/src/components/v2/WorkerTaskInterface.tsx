@@ -19,7 +19,8 @@ import {
     Trash2,
     XCircle,
     X,
-    Maximize2
+    Maximize2,
+    ArrowLeft
 } from 'lucide-react';
 
 export interface TaskData {
@@ -985,7 +986,7 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                         className="p-2 hover:bg-gray-800 rounded-md text-gray-400"
                         title="Back to Dashboard"
                     >
-                        <LayoutDashboard className="w-5 h-5" />
+                        <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div>
                         <h1 className="text-sm font-semibold text-white flex items-center gap-2">
