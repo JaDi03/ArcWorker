@@ -426,7 +426,13 @@ export const WorkerTaskFeed: React.FC<WorkerTaskFeedProps> = ({ onBack }) => {
                 }
             };
 
-            if (isConnected) {
+            // DETERMINE WALLET TYPE PRIORITY
+            const storedUser = localStorage.getItem('arc_user');
+            const userProfile = storedUser ? JSON.parse(storedUser) : {};
+            const isCircleUser = userProfile.walletType === 'circle' || !!userProfile.userId;
+
+            // Only use Wagmi if connected AND NOT strictly a Circle user
+            if (isConnected && !isCircleUser) {
                 // EOA Flow
                 await writeSubmit({
                     address: CONTRACTS.TaskEscrow.address,
