@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LayoutDashboard, Briefcase, History, TrendingUp, Wallet, LogOut, Bell, ChevronRight, Plus, Star, CheckCircle, Clock, Eye, EyeOff, Copy } from 'lucide-react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useDisconnect } from 'wagmi';
 import { CONTRACTS } from '@/utils/contracts';
 import { useTasks } from '@/hooks/useTasks';
 import { formatUnits, parseEther, parseUnits } from 'viem';
@@ -13,6 +13,7 @@ export default function WorkerDashboard() {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'market' | 'history' | 'investments'>('dashboard');
     const [isWalletOpen, setIsWalletOpen] = useState(false);
     const { address: eoaAddress, isConnected } = useAccount();
+    const { disconnectAsync } = useDisconnect();
     const [user, setUser] = useState<any>(() => {
         if (typeof window !== 'undefined') {
             const stored = localStorage.getItem('arc_user');
@@ -369,7 +370,10 @@ export default function WorkerDashboard() {
 
                     <div className="mt-auto pt-4">
                         <button
-                            onClick={() => {
+                            onClick={async () => {
+                                try {
+                                    await disconnectAsync();
+                                } catch (e) { }
                                 AuthModule.clearAllSessions();
                                 window.location.href = '/';
                             }}

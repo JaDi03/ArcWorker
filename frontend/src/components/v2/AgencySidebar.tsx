@@ -16,7 +16,7 @@ interface AgencySidebarProps {
 
 export const AgencySidebar: React.FC<AgencySidebarProps> = ({ activePage, onNavigate, onWalletOpen, reviewCount = 0 }) => {
     const [user, setUser] = React.useState<any>(null);
-    const { disconnect } = useDisconnect();
+    const { disconnectAsync } = useDisconnect();
 
     React.useEffect(() => {
         const stored = localStorage.getItem('arc_user');
@@ -78,8 +78,11 @@ export const AgencySidebar: React.FC<AgencySidebarProps> = ({ activePage, onNavi
                     </div>
                 </div>
                 <button
-                    onClick={() => {
-                        disconnect(); // Disconnect Wagmi wallet
+                    onClick={async () => {
+                        try {
+                            await disconnectAsync(); // Ensure wallet is disconnected
+                        } catch (e) { console.error("Disconnect error", e); }
+
                         AuthModule.clearAllSessions();
                         window.location.href = '/';
                     }}
