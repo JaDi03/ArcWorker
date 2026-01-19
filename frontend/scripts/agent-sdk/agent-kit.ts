@@ -118,8 +118,8 @@ export class ArcWorkerAgent {
 
         console.log(`📤 Publishing batch of ${params.count} tasks...`);
 
-        const platformFeeBps = 500n; // 5% fee from contract
-        const fee = (rewardWei * platformFeeBps) / 10000n;
+        const platformFeeBps = BigInt(500); // 5% fee from contract
+        const fee = (rewardWei * platformFeeBps) / BigInt(10000);
         const requiredPerSub = rewardWei + fee;
         const totalValue = requiredPerSub * BigInt(params.count) * BigInt(params.requiredSubmissions);
 
