@@ -204,8 +204,13 @@ export const AgencyDashboard: React.FC = () => {
             setIsReviewing(true);
             const taskId = selectedReview.id;
 
-            if (isConnected) {
-                // EOA Flow
+            // DETERMINE WALLET PRIORITY (Circle First)
+            const storedUser = localStorage.getItem('arc_user');
+            const userProfile = storedUser ? JSON.parse(storedUser) : {};
+            const isCircleUser = userProfile.walletType === 'circle' || !!userProfile.userId;
+
+            if (isConnected && !isCircleUser) {
+                // EOA Flow (Only if NOT strictly a Circle user)
                 await writeAgencyAction({
                     address: CONTRACTS.TaskEscrow.address,
                     abi: CONTRACTS.TaskEscrow.abi,
@@ -309,7 +314,13 @@ export const AgencyDashboard: React.FC = () => {
             }
 
             // Check if using wagmi connector (MetaMask, etc.) or Circle wallet
-            if (isConnected && userAddress) {
+            // DETERMINE WALLET PRIORITY (Circle First)
+            const storedUser = localStorage.getItem('arc_user');
+            const userProfile = storedUser ? JSON.parse(storedUser) : {};
+            const isCircleUser = userProfile.walletType === 'circle' || !!userProfile.userId;
+
+            // Check if using wagmi connector (MetaMask, etc.) AND NOT Circle
+            if (isConnected && userAddress && !isCircleUser) {
                 // Use wagmi for connected wallets - Batch call
                 const taskIds = tasksToCancel.map(t => BigInt(t.id));
                 await writeAgencyAction({
@@ -319,7 +330,7 @@ export const AgencyDashboard: React.FC = () => {
                     args: [taskIds],
                 });
                 // isActionConfirmed handles cleanup
-            } else if (circleAddress) {
+            } else if (circleAddress || isCircleUser) {
                 // Use Circle API for Circle wallets - Batch call
                 const circleUser = localStorage.getItem('arc_user');
                 const sessionToken = localStorage.getItem('arc_session_token');
