@@ -553,7 +553,7 @@ export default function WorkerDashboard() {
 
                                 <div className="flex justify-between items-center mb-2">
                                     <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                        <Star className="w-5 h-5 text-blue-600 fill-blue-100" /> Arc-Yield Savings
+                                        <Star className="w-5 h-5 text-blue-600 fill-blue-100" /> USYC Yield Savings
                                     </h3>
                                     <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">5% APY</span>
                                 </div>
@@ -648,7 +648,7 @@ export default function WorkerDashboard() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                                     <div className="space-y-6">
                                         <div className="p-6 bg-slate-50 rounded-xl border border-slate-100">
-                                            <p className="text-sm text-gray-500 mb-2 font-medium">How Arc-Yield Works</p>
+                                            <p className="text-sm text-gray-500 mb-2 font-medium">How USYC Yield Works</p>
                                             <p className="text-gray-600 leading-relaxed">
                                                 Your earned rewards are automatically placed into our <span className="text-blue-600 font-bold text-sm">MockYieldVault</span>.
                                                 This vault simulates a 5% fixed APY, similar to institutional products like USYC.
