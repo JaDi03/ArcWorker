@@ -280,7 +280,7 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
         const hasTools = config.tools && config.tools.length > 0;
 
         return (
-            <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col z-10 shrink-0">
+            <aside className="w-full md:w-64 bg-gray-900 border-b md:border-b-0 md:border-r border-gray-800 flex flex-col z-10 shrink-0 h-auto md:h-full">
                 {/* 1. TOOLS SECTION */}
                 {hasTools && (
                     <div className="p-4 border-b border-gray-800">
@@ -442,9 +442,16 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
 
     const getMouseCoords = (e: React.MouseEvent) => {
         const rect = e.currentTarget.getBoundingClientRect();
+        const clientX = e.clientX - rect.left;
+        const clientY = e.clientY - rect.top;
+
+        // Scale to 800x600 reference system
+        const scaleX = 800 / rect.width;
+        const scaleY = 600 / rect.height;
+
         return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
+            x: clientX * scaleX,
+            y: clientY * scaleY
         };
     };
 
@@ -552,8 +559,8 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
 
     const renderVision = () => (
         <div
-            className="relative shadow-2xl rounded-sm border border-gray-700 select-none bg-gray-900 overflow-hidden cursor-crosshair group outline-none"
-            style={{ width: '800px', height: '600px' }}
+            className="relative shadow-2xl rounded-sm border border-gray-700 select-none bg-gray-900 overflow-hidden cursor-crosshair group outline-none w-full max-w-[800px] aspect-[4/3]"
+            style={{ height: 'auto' }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -572,7 +579,7 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                 <img src={task.imageUrl} className="w-full h-full object-contain pointer-events-none relative z-10 opacity-80" alt="Task Subject" />
             )}
 
-            <svg className="absolute inset-0 w-full h-full z-20 pointer-events-none">
+            <svg className="absolute inset-0 w-full h-full z-20 pointer-events-none" viewBox="0 0 800 600" preserveAspectRatio="none">
                 {/* POLYGONS */}
                 {polygons.map(poly => (
                     <g key={poly.id} onClick={(e) => { e.stopPropagation(); setSelectedPolyId(poly.id); }} className="pointer-events-auto cursor-pointer">
@@ -639,10 +646,10 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                     key={box.id}
                     className={`absolute border-2 z-30 transition-all ${selectedBoxId === box.id ? 'border-white ring-2 ring-white/50 z-40' : ''}`}
                     style={{
-                        left: box.x,
-                        top: box.y,
-                        width: box.w,
-                        height: box.h,
+                        left: `${(box.x / 800) * 100}%`,
+                        top: `${(box.y / 600) * 100}%`,
+                        width: `${(box.w / 800) * 100}%`,
+                        height: `${(box.h / 600) * 100}%`,
                         borderColor: box.color,
                         backgroundColor: `${box.color}20`
                     }}
@@ -669,10 +676,10 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                 <div
                     className="absolute border-2 border-dashed border-white z-50 pointer-events-none"
                     style={{
-                        left: currentBox.x,
-                        top: currentBox.y,
-                        width: currentBox.w,
-                        height: currentBox.h,
+                        left: `${(currentBox.x / 800) * 100}%`,
+                        top: `${(currentBox.y / 600) * 100}%`,
+                        width: `${(currentBox.w / 800) * 100}%`,
+                        height: `${(currentBox.h / 600) * 100}%`,
                     }}
                 />
             )}
@@ -964,7 +971,7 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
     return (
         <div className="flex flex-col h-screen overflow-hidden bg-gray-950 text-gray-200 font-sans">
             {/* Header */}
-            <header className="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-4 z-20 shrink-0">
+            <header className="h-auto md:h-14 py-2 bg-gray-900 border-b border-gray-800 flex flex-col md:flex-row items-center justify-between px-4 z-20 shrink-0 gap-3">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={onExit}
@@ -1021,12 +1028,12 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                 </div>
             </header>
 
-            <main className="flex-1 flex overflow-hidden">
+            <main className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
                 {/* Left Toolbar (Tools & Instructions) */}
                 {renderLeftSidebar()}
 
                 {/* Center Workspace */}
-                <section className="flex-1 bg-gray-950 relative overflow-hidden flex items-center justify-center p-8">
+                <section className="flex-1 bg-gray-950 relative overflow-y-auto md:overflow-hidden flex items-center justify-center p-4 md:p-8 min-h-[400px]">
                     {task.type === 'vision' && renderVision()}
                     {task.type === 'nlp' && renderNLP()}
                     {task.type === 'audio' && renderAudio()}
@@ -1034,7 +1041,7 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                 </section>
 
                 {/* Right Panel (Instructions / Classes) */}
-                <aside className="w-80 bg-gray-900 border-l border-gray-800 flex flex-col z-10">
+                <aside className="w-full md:w-80 bg-gray-900 border-t md:border-t-0 md:border-l border-gray-800 flex flex-col z-10 h-auto md:h-full">
                     <div className="flex border-b border-gray-800 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                         <div className="px-5 py-3 text-blue-400 border-b-2 border-blue-500">
                             {config.classes ? 'Select Answer' : 'Task Details'}
