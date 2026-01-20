@@ -13,7 +13,7 @@ build/
 dist/
 *.tsbuildinfo
 frontend/public/uploads/
-frontend/public/*_tips_preview_*.png
+
 
 
 # Environmet & Secrets
