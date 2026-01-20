@@ -26,6 +26,22 @@ export const TaskAnswerViewer = ({ task }: { task: any }) => {
     // taskSubmissions returns: [worker, answer, approved]
     const answer = (submissionData as any)?.[1] || (Array.isArray(submissionData) ? submissionData[1] : '');
 
+    // NEW: Fetch Text Content if URL (Async)
+    const [fetchedText, setFetchedText] = React.useState<string | null>(null);
+    const rawContentUrl = task.metadata?.content || task.textContent;
+
+    React.useEffect(() => {
+        if (rawContentUrl && (rawContentUrl.startsWith('http') || rawContentUrl.startsWith('/'))) {
+            fetch(rawContentUrl)
+                .then(res => res.text())
+                .then(text => setFetchedText(text))
+                .catch(err => {
+                    console.error("Failed to fetch text content:", err);
+                    setFetchedText("Error loading text content.");
+                });
+        }
+    }, [rawContentUrl]);
+
     // 3. Helper to determine content type
     const isNER = task.metadata?.tmpl === 'nlp-ner' || task.type === 'nlp-ner';
 
@@ -58,9 +74,7 @@ export const TaskAnswerViewer = ({ task }: { task: any }) => {
     // We check if answer is present, or if submissionData exists
     if (!submissionData && !answer) return <div className="text-gray-500">No submission found for this task.</div>;
 
-    if (isNER && Array.isArray(parsedAnswer)) {
-        // ... (existing NER code)
-    }
+
 
     // IMAGE URL HELPER
     const imageUrl = task.metadata?.content || task.metadata?.imageUrl || task.imageUrl;
@@ -203,11 +217,116 @@ export const TaskAnswerViewer = ({ task }: { task: any }) => {
         );
     }
 
+    // 5. NER Visualizer
+    if (isNER && Array.isArray(parsedAnswer)) {
+        return (
+            <div className="w-full max-w-2xl bg-white rounded-lg shadow-lg overflow-hidden">
+                <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                    <h4 className="font-bold text-gray-700">Named Entity Recognition</h4>
+                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-mono">
+                        {parsedAnswer.length} entities
+                    </span>
+                </div>
+
+                {/* Full Text Reconstruction */}
+                <div className="p-8 text-lg leading-relaxed font-serif text-gray-800 border-b border-gray-100 bg-white">
+                    {(() => {
+                        // 1. Get the content (Prioritize fetched text, then raw content if not a URL, then default)
+                        const isUrl = rawContentUrl && (rawContentUrl.startsWith('http') || rawContentUrl.startsWith('/'));
+                        const rawContent = fetchedText || (!isUrl ? rawContentUrl : "Loading text content...");
+
+
+                        // 2. Sort annotations by start index
+                        const sortedAnns = [...parsedAnswer].sort((a: any, b: any) => a.start - b.start);
+
+                        const segments = [];
+                        let lastIndex = 0;
+
+                        sortedAnns.forEach((ann: any, i: number) => {
+                            // Text before highlight
+                            if (ann.start > lastIndex) {
+                                segments.push(<span key={`text-${i}`}>{rawContent.slice(lastIndex, ann.start)}</span>);
+                            }
+
+                            // Determine color (consistent hashing)
+                            const getTagColor = (tag: string) => {
+                                let hash = 0;
+                                for (let c = 0; c < tag.length; c++) hash = tag.charCodeAt(c) + ((hash << 5) - hash);
+                                const hue = Math.abs(hash % 360);
+                                return `hsl(${hue}, 70%, 85%)`;
+                            };
+                            const color = ann.color || getTagColor(ann.tag || ann.label || 'ENTITY');
+
+                            // Highlighted text
+                            segments.push(
+                                <mark
+                                    key={`mark-${i}`}
+                                    className="relative group rounded px-1 py-0.5 mx-0.5 font-medium cursor-help"
+                                    style={{ backgroundColor: color }}
+                                >
+                                    {rawContent.slice(ann.start, ann.end)}
+                                    {/* Tooltip Tag */}
+                                    <span className="absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gray-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10 pointer-events-none select-none shadow">
+                                        {ann.tag || ann.label}
+                                    </span>
+                                </mark>
+                            );
+                            lastIndex = ann.end;
+                        });
+
+                        // Remaining text
+                        if (lastIndex < rawContent.length) {
+                            segments.push(<span key="text-end">{rawContent.slice(lastIndex)}</span>);
+                        }
+
+                        return <div className="whitespace-pre-wrap">{segments}</div>;
+                    })()}
+                </div>
+
+                {/* Raw JSON fallback details (Collapsed) */}
+                <div className="bg-gray-50 p-2 border-t border-gray-100">
+                    <details className="text-xs text-gray-500">
+                        <summary className="cursor-pointer font-bold px-2 py-1 hover:text-gray-700 select-none">View Raw JSON Output</summary>
+                        <div className="bg-gray-900 p-4 rounded mt-2 overflow-x-auto">
+                            <pre className="text-[10px] text-gray-400 font-mono">
+                                {JSON.stringify(parsedAnswer, null, 2)}
+                            </pre>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        );
+    }
+
+    // 6. Text Classification Mapping (ID -> Label)
+    let displayContent = parsedAnswer;
+
+    // Check if answer is an index (number or string number) and we have options
+    const options = task.metadata?.options || [];
+    if (options.length > 0) {
+        // Try to parse as integer
+        const idx = parseInt(parsedAnswer);
+        if (!isNaN(idx) && options[idx]) {
+            displayContent = (
+                <div className="flex flex-col items-center gap-2">
+                    <span className="text-2xl font-bold text-gray-900">{options[idx]}</span>
+                    <span className="text-xs text-gray-400 font-mono">ID: {parsedAnswer}</span>
+                </div>
+            );
+        } else if (typeof parsedAnswer === 'string') {
+            // Maybe it's the label itself, or no match
+            displayContent = <span className="text-lg font-medium text-gray-900">{parsedAnswer}</span>;
+        }
+    }
+
     return (
-        <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full">
+        <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full text-center">
             <h4 className="text-xs font-bold text-gray-400 uppercase mb-4">Worker Answer</h4>
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-medium">
-                {typeof parsedAnswer === 'object' ? JSON.stringify(parsedAnswer, null, 2) : (parsedAnswer || "No text answer provided.")}
+            <div className="p-6 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 flex justify-center items-center min-h-[100px]">
+                {typeof displayContent === 'object' && !React.isValidElement(displayContent)
+                    ? <pre className="text-left text-xs">{JSON.stringify(displayContent, null, 2)}</pre>
+                    : displayContent || <span className="text-gray-400 italic">No answer provided.</span>
+                }
             </div>
         </div>
     );
