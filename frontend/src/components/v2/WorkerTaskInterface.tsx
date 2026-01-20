@@ -217,7 +217,7 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
         setIsSubmitting(true);
         // Collect current state based on task type
         // For Survey/Form tasks, serialize the answers as the main text output
-        let finalOutputText = textInput;
+        let finalOutputText = textInput.trim();
         if (task.type === 'form') {
             finalOutputText = JSON.stringify(surveyAnswers);
         }

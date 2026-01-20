@@ -243,7 +243,7 @@ export default function CampaignCreatorPage() {
             options: campaignConfig.classificationOptions || campaignConfig.labels || campaignConfig.sentimentLabels || [],
             entityTags: campaignConfig.entityTags || [],
             questions: campaignConfig.questions || [], // Start with empty array if undefined
-            correctAnswer: campaignConfig.correctAnswer, // REQUIRED for Auto-Verification
+            correctAnswer: campaignConfig.correctAnswer?.trim(), // REQUIRED for Auto-Verification (Trimmed for consistency)
             timestamp: new Date().toISOString()
         });
 
@@ -268,7 +268,10 @@ export default function CampaignCreatorPage() {
         let correctAnswerHash = "0x0000000000000000000000000000000000000000000000000000000000000000";
         if (campaignConfig.correctAnswer) {
             const { keccak256, encodePacked } = await import('viem');
-            correctAnswerHash = keccak256(encodePacked(['string'], [campaignConfig.correctAnswer]));
+            // FIX: Trim and lowercase to ensure robust matching with worker submissions
+            const cleanAnswer = campaignConfig.correctAnswer.trim();
+            correctAnswerHash = keccak256(encodePacked(['string'], [cleanAnswer]));
+            console.log(`[Campaign] Hashing Golden Answer: "${cleanAnswer}" -> ${correctAnswerHash}`);
         }
 
         console.log(`[Campaign] Deploying with ${requiredSubmissions} workers per task. Golden Set: ${campaignConfig.correctAnswer ? 'YES' : 'NO'}`);
