@@ -24,6 +24,26 @@ export const InstructionsStep: React.FC<StepProps> = ({ index, config, onChange 
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
     const [fileName, setFileName] = useState<string | null>(null);
 
+    // Auto-fill instructions based on module type if empty
+    React.useEffect(() => {
+        if (!config.instructions || config.instructions.trim() === '') {
+            const type = config.moduleId;
+            let defaultText = '';
+
+            if (type === 'vision-bbox') {
+                defaultText = "1. Look at the image carefully.\n2. Draw a tight box around every object of interest.\n3. Select the correct label for each box from the list.\n4. Ensure the box contains the entire object, not just a part of it.";
+            } else if (type === 'vision-seg') {
+                defaultText = "1. Outline the object precisely using the Polygon tool.\n2. Click along the edges of the object.\n3. Click the starting point to close the shape.\n4. Choose the appropriate label.";
+            } else if (type === 'nlp-ner') {
+                defaultText = "1. Read the text segment.\n2. Select a Tag from the toolbar (e.g., Person, Org).\n3. Highlight the text that corresponds to that tag.\n4. Ensure you capture the full name or entity.";
+            } else if (type === 'vision-class') {
+                defaultText = "1. Analyze the image.\n2. Choose the single best category that describes the image from the options on the right.";
+            }
+
+            if (defaultText) onChange({ instructions: defaultText });
+        }
+    }, [config.moduleId]);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {

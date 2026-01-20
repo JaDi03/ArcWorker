@@ -335,92 +335,77 @@ export const WorkerTaskInterface: React.FC<WorkerTaskInterfaceProps> = ({
                         </p>
                     </div>
 
-                    {/* VISUAL GUIDE FOR NER */}
-                    {config.entityTags && (
+                    {/* UNIFIED VISUAL GUIDE */}
+                    {(config.exampleImageUrl || config.entityTags || config.tools?.includes('draw') || config.tools?.includes('poly')) && (
                         <div className="mt-4 pt-4 border-t border-gray-800">
-                            <div className="bg-gray-800 p-2 rounded-lg border border-gray-700 mb-3 opacity-80 group/guide relative">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">NER Guide</p>
-                                <div className="relative cursor-zoom-in" onClick={() => setExpandedImage("/ner_guide.png")}>
-                                    <img
-                                        src="/ner_guide.png"
-                                        className="w-full rounded border border-gray-600 mb-2 object-cover"
-                                        alt="NER Guide"
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover/guide:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/guide:opacity-100">
-                                        <Maximize2 className="w-5 h-5 text-white drop-shadow-lg" />
+                            {/* 1. Image Guide (Generic) */}
+                            {(config.exampleImageUrl || config.entityTags) && (
+                                <div className="bg-gray-800 p-2 rounded-lg border border-gray-700 mb-3 opacity-80 group/guide relative">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Visual Guide</p>
+                                    <div className="relative cursor-zoom-in" onClick={() => setExpandedImage(config.exampleImageUrl || (config.entityTags ? "/ner_guide.png" : null))}>
+                                        <img
+                                            src={config.exampleImageUrl || (config.entityTags ? "/ner_guide.png" : "/bbox_tips_preview_1768020935499.png")}
+                                            className="w-full rounded border border-gray-600 mb-2 object-cover"
+                                            alt="Task Guide"
+                                            onError={(e) => {
+                                                // Hide if simple fallback fails and no user image provided
+                                                if (!config.exampleImageUrl && !config.entityTags) e.currentTarget.style.display = 'none';
+                                            }}
+                                        />
+                                        <div className="absolute inset-0 bg-black/0 group-hover/guide:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/guide:opacity-100">
+                                            <Maximize2 className="w-5 h-5 text-white drop-shadow-lg" />
+                                        </div>
                                     </div>
+                                    <p className="text-[10px] text-gray-500 text-center">Click to expand</p>
                                 </div>
-                            </div>
-                        </div>
-                    )}
+                            )}
 
-                    {/* VISUAL GUIDE FOR BBOX */}
-                    {config.tools?.includes('draw') && (
-                        <div className="mt-4 pt-4 border-t border-gray-800">
-                            <div className="bg-gray-800 p-2 rounded-lg border border-gray-700 mb-3 opacity-80 group/guide relative">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Box Guide</p>
-                                <div className="relative cursor-zoom-in" onClick={() => setExpandedImage(config.exampleImageUrl || "/bbox_tips_preview_1768020935499.png")}>
-                                    <img
-                                        src={config.exampleImageUrl || "/bbox_tips_preview_1768020935499.png"}
-                                        className="w-full rounded border border-gray-600 mb-2 object-cover"
-                                        alt="Bounding Box Guide"
-                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover/guide:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/guide:opacity-100">
-                                        <Maximize2 className="w-5 h-5 text-white drop-shadow-lg" />
+                            {/* 2. Tool Controls Help */}
+                            <div className="space-y-3">
+                                {config.tools?.includes('draw') && (
+                                    <div className="flex gap-3">
+                                        <div className="w-5 h-5 rounded bg-gray-800 flex items-center justify-center text-gray-400 shrink-0 mt-0.5">
+                                            <MousePointer2 className="w-3 h-3" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-300">Draw Box</p>
+                                            <p className="text-[10px] text-gray-500">Hold click & drag diagonal.</p>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex gap-3">
-                                    <div className="w-5 h-5 rounded bg-gray-800 flex items-center justify-center text-gray-400 shrink-0 mt-0.5">
-                                        <MousePointer2 className="w-3 h-3" />
+                                )}
+                                {config.tools?.includes('poly') && (
+                                    <>
+                                        <div className="flex gap-3">
+                                            <div className="w-5 h-5 rounded bg-gray-800 flex items-center justify-center text-gray-400 shrink-0 mt-0.5">
+                                                <Hexagon className="w-3 h-3" />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-300">Create Polygon</p>
+                                                <p className="text-[10px] text-gray-500">Click points. <b>ESC</b> to cancel.</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="w-5 h-5 rounded bg-gray-800 flex items-center justify-center text-gray-400 shrink-0 mt-0.5">
+                                                <Users className="w-3 h-3" />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-300">Close Shape</p>
+                                                <p className="text-[10px] text-gray-500">Click start point to finish.</p>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                                {config.entityTags && (
+                                    <div className="flex gap-3">
+                                        <div className="w-5 h-5 rounded bg-gray-800 flex items-center justify-center text-gray-400 shrink-0 mt-0.5">
+                                            <MousePointer2 className="w-3 h-3" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-300">Highlight Text</p>
+                                            <p className="text-[10px] text-gray-500">Select tag, then drag cursor over text.</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-300">Draw Box</p>
-                                        <p className="text-[10px] text-gray-500">Hold click & drag diagonal.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* VISUAL GUIDE FOR POLYGON */}
-                    {config.tools?.includes('poly') && (
-                        <div className="mt-4 pt-4 border-t border-gray-800">
-                            <div className="bg-gray-800 p-2 rounded-lg border border-gray-700 mb-3 opacity-80 group/guide relative">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Polygon Guide</p>
-                                <div className="relative cursor-zoom-in" onClick={() => setExpandedImage(config.exampleImageUrl || "/seg_tips_preview_1768027204896.png")}>
-                                    <img
-                                        src={config.exampleImageUrl || "/seg_tips_preview_1768027204896.png"}
-                                        className="w-full rounded border border-gray-600 mb-2 object-cover"
-                                        alt="Guide"
-                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover/guide:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/guide:opacity-100">
-                                        <Maximize2 className="w-5 h-5 text-white drop-shadow-lg" />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex gap-3">
-                                    <div className="w-5 h-5 rounded bg-gray-800 flex items-center justify-center text-gray-400 shrink-0 mt-0.5">
-                                        <Hexagon className="w-3 h-3" />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-300">Create Polygon</p>
-                                        <p className="text-[10px] text-gray-500">Click points. <b>ESC</b> to cancel.</p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-3">
-                                    <div className="w-5 h-5 rounded bg-gray-800 flex items-center justify-center text-gray-400 shrink-0 mt-0.5">
-                                        <Users className="w-3 h-3" />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-300">Close Shape</p>
-                                        <p className="text-[10px] text-gray-500">Click start point to finish.</p>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     )}
